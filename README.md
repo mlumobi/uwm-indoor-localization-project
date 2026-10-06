@@ -92,6 +92,7 @@ The HID whitepaper is retained as a background reference; it was not used as evi
 
 ## Sources and course guide
 
+- [EC601_Sprint1](https://docs.google.com/presentation/d/1xGqi0pRQQJJB1kcCf-J-DX_ZKf9MRdXoSHOy6zalLVk/edit?slide=id.p1#slide=id.p1) — recurring reference for this project's Sprint 1 plan. When referring to the "Sprint 1 slides" or "EC601_Sprint1," use this deck. Slide 2 lists the required plan sections, including the primary target user.
 - [EC601 Defining Your Project](https://docs.google.com/presentation/d/1mjnqe2xNa9wXm628SlQiQ_eo9ZSn7dLjxyB_iZE9pWU/edit) — project definition, mission, users, stories, INVEST, thin slicing, and assumption testing.
 - [Qorvo DWM3000 product information](https://www.qorvo.com/products/p/DWM3000) — component capabilities and intended applications.
 - [Espressif ESP32 Series Datasheet](https://documentation.espressif.com/esp32_datasheet_en.html) — MCU radio and peripheral capabilities; verify the exact selected part separately.
