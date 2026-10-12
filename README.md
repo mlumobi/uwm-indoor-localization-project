@@ -32,13 +32,13 @@ Qorvo lists the DWM3000 for TWR and TDoA tag or anchor use, with a customer-supp
 ```text
 Two UWB tags
     │ UWB broadcasts with tag ID and sequence number
-    ▼
+    v
 Three fixed anchors
     │ Hardware arrival timestamps and receive diagnostics
     │ Wi-Fi backhaul
-    ▼
+    v
 Central computer
-    Clock correction → frame matching → TDoA solver → map and logs
+    Clock correction -> frame matching -> TDoA solver -> map and logs
 ```
 
 In uplink TDoA, anchors observe the same tag transmission. Differences in its arrival times correspond to differences in path lengths. Anchor clock synchronization or correction is essential; Wi-Fi or Bluetooth transports the records and does not, by itself, establish the required UWB timing basis. The proposed records therefore contain **arrival timestamps**, rather than independently measured tag-to-anchor distances. [ESP32 and DWM3000 study](https://arxiv.org/html/2403.10194v1)
