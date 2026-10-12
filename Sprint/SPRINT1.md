@@ -10,7 +10,7 @@ The primary target user is a warehouse or factory safety manager responsible for
 
 ## User stories
 
-1. If
+1. As a warehouse robotics engineer, I want to see a tagged robot’s position on an indoor map so that I can monitor where it is without integrating with its onboard navigation software.
 2. If
 3. If
 4. If
