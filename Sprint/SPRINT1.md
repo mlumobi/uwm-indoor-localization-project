@@ -11,6 +11,7 @@ The primary target user is a warehouse or factory safety manager responsible for
 ## User stories
 
 1. As a warehouse robotics engineer, I want to see a tagged robot’s position on an indoor map so that I can monitor where it is without integrating with its onboard navigation software.
+   - **Acceptance criteria:** Display three fixed anchors and one moving tag on a 2D indoor map. Calculate the displayed position from simulated UWB arrival timestamps. At three known test positions, compare estimated and true coordinates and report position errors in meters. Display the tag ID and age of its last accepted position. Mark the position stale within one second after updates stop. Clearly label the demo "Simulation—no physical UWB hardware." Repeat the position checks with a physical tag after hardware bring-up.
 2. As a warehouse safety manager, I want to distinguish the positions of two tagged robots on the same map so that I can monitor each robot without confusing their identities.
    - **Acceptance criteria:** Display two distinct tag IDs with separate labels or colors. Replay two simulated paths that cross and confirm that the IDs never swap. Report the achieved update rate and missing updates separately for each tag. Demonstrate this with simulation first; repeat with two physical tags after hardware bring-up.
 3. As a warehouse safety manager, I want to see when a robot's position is stale or unavailable so that I do not mistake an old location for its current position.
