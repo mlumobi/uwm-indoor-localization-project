@@ -11,7 +11,6 @@ The primary target user is a warehouse or factory safety manager responsible for
 ## User stories
 
 1. As a warehouse robotics engineer, I want to see a tagged robot’s position on an indoor map so that I can monitor where it is without integrating with its onboard navigation software.
-   - **Acceptance criteria:** Display three fixed anchors and one moving tag on a 2D indoor map. Calculate the displayed position from simulated UWB arrival timestamps. At three known test positions, compare estimated and true coordinates and report position errors in meters. Display the tag ID and age of its last accepted position. Mark the position stale within one second after updates stop. Clearly label the demo "Simulation—no physical UWB hardware." Repeat the position checks with a physical tag after hardware bring-up.
    - **Acceptance criteria:** Display three fixed anchors and one moving tag on a 2D indoor map. Calculate the displayed position from simulated UWB arrival timestamps. At three known test positions, compare estimated and true coordinates and report position errors in meters. Display the tag ID and age of its last accepted position.
 2. As a warehouse safety manager, I want to distinguish the positions of two tagged robots on the same map so that I can monitor each robot without confusing their identities.
    - **Acceptance criteria:** Display two distinct tag IDs with separate labels or colors. Replay two simulated paths that cross and confirm that the IDs never swap. Report the achieved update rate and missing updates separately for each tag. Demonstrate this with simulation first; repeat with two physical tags after hardware bring-up.
@@ -85,8 +84,74 @@ These are unverified assumptions. The simulation can test the calculation and di
 
 ## Baseline
 
+I will evaluate the prototype against **ground truth: the measured physical location of the tag and the observed time of its movement or zone entry**. This reference lets me measure accuracy and delay; it does not establish that the system performs better than another localization method.
+
+### Multi-location accuracy test
+
+I will mark and survey nine test locations across the indoor test area, including its center and edges, using a common coordinate origin and a fixed tag height. I will keep calibration locations separate from evaluation locations. At each evaluation location, I will hold the tag stationary and record detected positions for 60 seconds. I will repeat the test for each physical tag available.
+
+For every accepted position, I will compare the ground-truth coordinates `(x_true, y_true)` with the detected coordinates `(x_detected, y_detected)`, all measured in centimeters:
+
+- **Coordinate error:** Report the signed x and y differences in cm.
+- **Position error:** Calculate `sqrt((x_detected − x_true)² + (y_detected − y_true)²)` in cm. Report median and 95th-percentile error at each location and across the full test.
+- **Normalized percentage error:** Calculate `100 × position error / surveyed test-area diagonal`, with both lengths in cm. Record the diagonal before testing and use it for every result. This expresses error relative to the area's size and avoids dividing by coordinates that may be zero.
+- **Valid-position percentage:** Report the percentage of scheduled tag transmissions that produce accepted positions, separately from position error, so missing or rejected updates remain visible.
+
+My initial accuracy targets are a median position error of no more than **30 cm** and a 95th-percentile error of no more than **75 cm**. These are proposed targets, not measured results.
+
+### Tracking-delay test
+
+I will move the tag along a marked path through surveyed checkpoints and compare the time it physically crosses each checkpoint with the time the displayed position crosses the same checkpoint line. I will use a recording that shows both the physical movement and the live display on one time reference. I will record at least ten crossings and measure **tracking delay in seconds** as `displayed crossing time − physical crossing time`.
+
+I will report median and maximum delay, the recording's time resolution, and missed crossings. Negative differences will also be retained because position error can make a displayed crossing appear early. This measures observed tracking lag, including localization and display effects. I will also stop tag updates and verify that the display marks the position stale within **one second** of the last accepted estimate.
+
+### Safety-zone alarm test
+
+I will define a rectangular restricted zone whose physical boundary matches its map coordinates. Using a tag that is not permitted in the zone, I will perform at least ten entries and exits. I will compare the observed physical entry times with alarm times using the same recording time reference.
+
+I will measure:
+
+- **Entry detection rate:** The percentage of physical entries that produce an alarm before the tag exits.
+- **Alarm delay:** Seconds from physical entry to the displayed alarm, reporting median and maximum delay for detected entries. Early alarms will be recorded separately.
+- **False alarms:** Alarms during a tagged path that stays outside the zone or for a permitted tag entering the zone.
+- **Event handling:** Whether an alarm remains active inside the zone without duplicate entry events and whether leaving and re-entering produces a new alarm.
+
+The initial functional target is to detect all ten non-permitted entries, produce no alarms in the outside-only or permitted-tag tests, and display an alarm within one display update after a fresh, accepted position first places the tag inside the zone. I will report physical-entry-to-alarm delay separately; the display-update target alone does not guarantee low physical tracking delay. Stale or invalid positions must not generate new entry alarms.
+
+I will retain coordinates, timestamps, position states, and alarm logs so the results can be reviewed. Any tests using additional simulated tags will be labeled as simulation and reported separately from physical measurements.
 
 ## Related work
 
+I will use these **eight reference documents**, including four research papers, three hardware documents, and one industrial whitepaper, to guide implementation and evaluation. The selected UWB module is **DWM3000**. Results from other systems are background evidence; I will measure my prototype's performance separately.
+
+### Research papers
+
+1. **Sebastian Krebs and Tom Herter (2024). [Ultra-Wideband Positioning System Based on ESP32 and DWM3000 Modules](https://arxiv.org/abs/2403.10194).** Research preprint describing identical ESP32/DWM3000 boards configured as a tag and anchors using TWR. It informs my shared hardware design and TWR fallback, but does not verify XIAO ESP32C3 compatibility or uplink TDoA synchronization.
+
+2. **Fengyun Zhang et al. (2021). [Design and Implementation of Real-Time Localization System (RTLS) based on UWB and TDoA Algorithm](https://arxiv.org/abs/2112.04839).** Research preprint covering an RTLS architecture, wireless clock synchronization, time-base selection, anchor deployment, and moving-target estimation. It guides my critical anchor-synchronization experiment and TDoA processing pipeline.
+
+3. **Wenda Zhao, Abhishek Goudar, and Angela P. Schoellig (2022). [Finding the Right Place: Sensor Placement for UWB Time Difference of Arrival Localization in Cluttered Indoor Environments](https://arxiv.org/abs/2204.04508).** Published in *IEEE Robotics and Automation Letters*; linked author manuscript. It considers anchor geometry and obstacle-induced measurement bias. It informs my anchor placement and testing at central, edge, and obstructed locations.
+
+4. **Wenda Zhao, Abhishek Goudar, Xinyuan Qiao, and Angela P. Schoellig (2022; manuscript revised 2024). [UTIL: An Ultra-wideband Time-difference-of-arrival Indoor Localization Dataset](https://arxiv.org/abs/2203.14471).** Presents TDoA measurements, receive diagnostics, and ground-truth robot poses using DWM1000 modules. It provides an example of reproducible ground-truth evaluation and recorded-data experiments. I will check hardware and measurement-format differences before adapting its data.
+
+### Hardware documentation
+
+5. **Qorvo. [DWM3000 Product Data Sheet, Rev B, May 2021](https://www.qorvo.com/products/p/DWM3000).** The official product page links the data sheet; a [local copy](../ref/DWM3000%20Data%20Sheet.pdf) is retained in this project. I will use its pin assignments, electrical requirements, SPI interface, and integration guidance for the shared tag/anchor design. Manufacturer performance figures are not measurements of my assembled system.
+
+6. **Seeed Studio. [Getting Started with Seeed Studio XIAO ESP32C3](https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/).** Official board guide covering pin assignments, development setup, battery connections, and charging guidance. It supports MCU bring-up, SPI wiring, and the mobile tag's power design.
+
+7. **Espressif Systems. [ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf).** Official chip-level reference for electrical characteristics, peripherals, and wireless capabilities. I will read it alongside Seeed's board guide to check controller constraints and distinguish chip capabilities from signals exposed on the XIAO board.
+
+### Industrial whitepaper
+
+8. **HID / Sewio Networks, Lubomir Mraz. [UWB: The Decision-Maker's Guide](https://campaigns.hidglobal.com/all-you-need-to-know-about-ultra-wideband).** Vendor whitepaper on industrial UWB RTLS applications and deployment considerations; a [local copy](../ref/HID-whitepaper-UWB-guide-for-decision-makers.pdf) is retained in this project. It provides context for warehouse and factory monitoring. Its business-benefit and deployment claims are vendor background, not independent evidence of my prototype's accuracy or safety effectiveness.
+
+The EC601 course planning links remain in the README, and the Makerfabs firmware repository remains in the Tooling section. They are supporting resources outside this eight-document Related work list. Uplink TDoA remains my preferred implementation; TWR is the fallback if synchronization cannot meet the timing criteria.
 
 ## Harm and Risk
+
+Employees could be injured if inaccurate or stale locations cause missed safety-zone alarms; repeated false alarms could also reduce trust in warnings.
+
+Linking tag IDs and movement histories to employee identities could expose personal information and daily routines if the data is accessed without permission.
+
+The worst realistic misuse is using safety-tracking data for covert employee surveillance or unfair disciplinary decisions; my prototype should not be relied on as the sole protection against machinery or robots.
