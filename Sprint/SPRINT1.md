@@ -155,3 +155,4 @@ Employees could be injured if inaccurate or stale locations cause missed safety-
 Linking tag IDs and movement histories to employee identities could expose personal information and daily routines if the data is accessed without permission.
 
 The worst realistic misuse is using safety-tracking data for covert employee surveillance or unfair disciplinary decisions; my prototype should not be relied on as the sole protection against machinery or robots.
+
