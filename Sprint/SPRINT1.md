@@ -11,10 +11,14 @@ The primary target user is a warehouse or factory safety manager responsible for
 ## User stories
 
 1. As a warehouse robotics engineer, I want to see a tagged robot’s position on an indoor map so that I can monitor where it is without integrating with its onboard navigation software.
-2. If
-3. If
-4. If
-5. If
+2. As a warehouse safety manager, I want to distinguish the positions of two tagged robots on the same map so that I can monitor each robot without confusing their identities.
+   - **Acceptance criteria:** Display two distinct tag IDs with separate labels or colors. Replay two simulated paths that cross and confirm that the IDs never swap. Report the achieved update rate and missing updates separately for each tag. Demonstrate this with simulation first; repeat with two physical tags after hardware bring-up.
+3. As a warehouse safety manager, I want to see when a robot's position is stale or unavailable so that I do not mistake an old location for its current position.
+   - **Acceptance criteria:** Show the age of the last accepted position. Stop one tag's updates and mark its position stale within one second of its last accepted update while the other tag continues updating. Preserve the last known position with a stale label, and clear that label when valid updates resume.
+4. As a warehouse safety manager, I want to register another robot by assigning it a compatible UWB tag so that I can expand monitoring without integrating with that robot's navigation software.
+   - **Acceptance criteria:** Add a tag ID and robot label through configuration without editing localization source code or robot navigation software. Reject duplicate tag IDs. Confirm that the new label appears when its observations arrive and that existing labels remain correct. Test registration with simulated observations first; validate attachment and operation on actual robot platforms later. A two-tag test does not establish larger-fleet capacity.
+5. As a warehouse safety manager, I want to replay a robot's recorded movement on the indoor map so that I can review where it was during a selected period.
+   - **Acceptance criteria:** Save tag IDs, accepted position timestamps, coordinates, and stale or invalid states. Replay a selected recorded session in time order with the same labels and positions, and visibly preserve gaps rather than inventing positions. Label simulated sessions as simulation and confirm that a second run reproduces the same trajectory.
 
 ## Feasibility
 
