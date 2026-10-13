@@ -43,7 +43,7 @@ Central computer
 
 In uplink TDoA, anchors observe the same tag transmission. Differences in its arrival times correspond to differences in path lengths. Anchor clock synchronization or correction is essential; Wi-Fi or Bluetooth transports the records and does not, by itself, establish the required UWB timing basis. The proposed records therefore contain **arrival timestamps**, rather than independently measured tag-to-anchor distances. [ESP32 and DWM3000 study](https://arxiv.org/html/2403.10194v1)
 
-**Recommended first experiment:** Verify that the selected boards and driver can produce consistent, corrected timestamps before building the full interface. A published ESP32/DWM3000 system uses two-way ranging (TWR); it provides hardware precedent but does not validate our uplink TDoA design. TWR may serve as a hardware baseline or an explicitly labeled fallback. [ESP32 and DWM3000 study](https://arxiv.org/html/2403.10194v1)
+**Recommended first experiment:** Verify that the selected boards and driver can produce consistent, corrected timestamps before building the full interface. A published ESP32/DWM3000 system uses two-way ranging (TWR); it provides hardware precedent but does not validate my uplink TDoA design. TWR may serve as a hardware baseline or an explicitly labeled fallback. [ESP32 and DWM3000 study](https://arxiv.org/html/2403.10194v1)
 
 Three anchors provide two independent time differences for a known-height 2D model. This is a minimal configuration with no extra measurement redundancy; it does not guarantee a unique or well-conditioned position. A fourth anchor is a recommended improvement if resources allow. Anchor placement and obstructed radio paths must be evaluated because both affect TDoA localization quality. [Sensor placement study](https://arxiv.org/abs/2204.04508)
 
@@ -95,7 +95,7 @@ The HID whitepaper is retained as a background reference; it was not used as evi
 - [EC601_Sprint1](https://docs.google.com/presentation/d/1xGqi0pRQQJJB1kcCf-J-DX_ZKf9MRdXoSHOy6zalLVk/edit?slide=id.p1#slide=id.p1) — recurring reference for this project's Sprint 1 plan. When referring to the "Sprint 1 slides" or "EC601_Sprint1," use this deck. Slide 2 lists the required plan sections, including the primary target user.
 - [EC601 Defining Your Project](https://docs.google.com/presentation/d/1mjnqe2xNa9wXm628SlQiQ_eo9ZSn7dLjxyB_iZE9pWU/edit) — project definition, mission, users, stories, INVEST, thin slicing, and assumption testing.
 - [Qorvo DWM3000 product information](https://www.qorvo.com/products/p/DWM3000) — component capabilities and intended applications.
-- [Espressif ESP32 Series Datasheet](https://documentation.espressif.com/esp32_datasheet_en.html) — MCU radio and peripheral capabilities; verify the exact selected part separately.
+- [Espressif ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf) — MCU radio and peripheral capabilities for the selected XIAO ESP32C3 controller; read alongside Seeed's board guide.
 - [Krebs and Herter, 2024](https://arxiv.org/html/2403.10194v1) — an ESP32/DWM3000 TWR prototype and its measured limitations.
 - [Zhao, Goudar, and Schoellig, 2022](https://arxiv.org/abs/2204.04508) — TDoA sensor placement and obstacle-induced measurement bias.
 
