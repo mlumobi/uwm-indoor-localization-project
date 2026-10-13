@@ -12,6 +12,7 @@ The primary target user is a warehouse or factory safety manager responsible for
 
 1. As a warehouse robotics engineer, I want to see a tagged robot’s position on an indoor map so that I can monitor where it is without integrating with its onboard navigation software.
    - **Acceptance criteria:** Display three fixed anchors and one moving tag on a 2D indoor map. Calculate the displayed position from simulated UWB arrival timestamps. At three known test positions, compare estimated and true coordinates and report position errors in meters. Display the tag ID and age of its last accepted position. Mark the position stale within one second after updates stop. Clearly label the demo "Simulation—no physical UWB hardware." Repeat the position checks with a physical tag after hardware bring-up.
+   - **Acceptance criteria:** Display three fixed anchors and one moving tag on a 2D indoor map. Calculate the displayed position from simulated UWB arrival timestamps. At three known test positions, compare estimated and true coordinates and report position errors in meters. Display the tag ID and age of its last accepted position.
 2. As a warehouse safety manager, I want to distinguish the positions of two tagged robots on the same map so that I can monitor each robot without confusing their identities.
    - **Acceptance criteria:** Display two distinct tag IDs with separate labels or colors. Replay two simulated paths that cross and confirm that the IDs never swap. Report the achieved update rate and missing updates separately for each tag. Demonstrate this with simulation first; repeat with two physical tags after hardware bring-up.
 3. As a warehouse safety manager, I want to define safety zones on the indoor map and receive an alert when a tag that is not permitted enters a zone so that I can identify restricted-area intrusions.
@@ -52,11 +53,11 @@ Planned tools and their purposes:
 | Git and GitHub | Track firmware, schematics, documentation, and measurement logs so changes and results can be reviewed | Developer's laptop and project repository |
 | RASTIC soldering station and multimeter | Assemble module connections; check continuity, shorts, supply voltage, and current during hardware bring-up | RASTIC electronics workspace |
 
-Use PlatformIO board ID `seeed_xiao_esp32c3` with `framework = arduino`. Record and pin the selected PlatformIO platform/core versions and driver commit in the project configuration after the first successful build. The candidate UWB driver's supplied ranging examples do not establish that our TDoA timing and synchronization path works.
+Use PlatformIO board ID `seeed_xiao_esp32c3` with `framework = arduino`. Record and pin the selected PlatformIO platform/core versions and driver commit in the project configuration after the first successful build. The candidate UWB driver's supplied ranging examples do not establish that my TDoA timing and synchronization path works.
 
 ## Two Weeks Demo
 
-At the end of two weeks, we will demonstrate the indoor tracking concept with a Python simulation, present the hardware purchased by the demo date and its delivery status, and explain the next steps for building and testing the physical prototype.
+At the end of two weeks, I will demonstrate the indoor tracking concept with a Python simulation, present the hardware purchased by the demo date and its delivery status, and explain the next steps for building and testing the physical prototype.
 
 - **Concept simulation:** Show three fixed anchors and one moving tag on an indoor map. Generate simulated UWB arrival timestamps assuming synchronized anchor clocks, calculate the tag's estimated 2D position, and compare it with the simulated true position. Display update age and mark the position stale within one second after updates stop. Label the demo "Simulation—no physical UWB hardware."
 - **Purchase progress:** Present the items actually ordered, quantities, costs, and expected delivery dates; show photos of any received parts. Distinguish purchased, received, and still-planned items. The feasibility table remains a planned purchase list until orders are confirmed.
@@ -66,6 +67,21 @@ The simulation demonstrates the calculation and display concept. Physical UWB ac
 
 ## Project Assumption
 
+These are unverified assumptions. The simulation can test the calculation and display logic, but it cannot validate physical UWB timing or accuracy.
+
+1. **Common anchor time reference — the critical assumption:** All anchors can be synchronized, or their clock offsets and drift corrected, to a sufficiently accurate common time reference for uplink TDoA within the project's time and budget. Absolute wall-clock time is unnecessary; the anchors need comparable receive timestamps. If this fails, the planned physical TDoA architecture cannot produce trustworthy positions, even if the simulation works.
+2. **Shared hardware and component compatibility:** Tags and anchors can use the same core hardware and wiring design, based on a XIAO ESP32C3 and DWM3000. Mobile tags add battery power, while anchors use a fixed power supply. Their firmware roles and settings may differ. The controller, UWB module, and selected driver are assumed to support packet exchange and the required timestamp access. Test one shared design in both roles before assembling all nodes, and check the tag's battery power path separately.
+3. **Acceptable localization error:** The physical system's position error is small enough for the planned monitoring demo, either directly or after calibration. Use the proposed static accuracy targets of median error ≤0.30 m and 95th-percentile error ≤0.75 m as initial criteria. Calibrate on separate data and evaluate at held-out surveyed positions, including obstructed paths. Do not assume calibration can remove every error; if the targets fail, revise anchor placement, the localization approach, or the demonstrated scope.
+4. **Simulated tags supplement limited physical tags:** With only one or two physical tags available, additional simulated tags can demonstrate multi-tag display, zone-entry alerts, abnormal-motion alerts, signal-loss handling, and replay. Give simulated tags distinct IDs and visible simulation labels, and test crossing paths and simultaneous events. These tests demonstrate software behavior; physical multi-tag capacity, radio contention, and deployment performance remain unverified.
+5. **Useful safety-monitoring information:** A warehouse or factory safety manager can understand the map, freshness indicators, and alerts and finds them useful for reviewing tagged vehicle or robot movement. Test this with a short interview and simulated scenarios, asking the user to identify a restricted-zone entry and a stale position. Treat the prototype as a monitoring demonstration; its suitability for operational safety decisions requires separate validation.
+
+**Test the critical assumption first, using the cheapest physical experiment:** Use one tag and two anchors from the planned hardware, borrowed if available, with USB power and timestamp logs. Defer batteries, PCB design, and interface work for this test. First verify timestamp access, then implement the intended clock-correction method and compare corrected arrival-time differences with those expected from surveyed tag and anchor positions.
+
+**Initial go/no-go criteria:** At every evaluation position, at least 95% of scheduled transmissions must be received and matched by both anchors, and the 95th-percentile absolute timing residual must be no greater than 1 ns. This is a proposed timing feasibility gate, not proof that the complete three-anchor system meets its position-accuracy targets. Time-box the experiment to two focused work sessions after packet exchange and timestamp logging work; record the actual session hours.
+
+**Preferred approach:** Implement uplink TDoA for the physical prototype. Two-way ranging (TWR) is the fallback if anchor synchronization or clock correction cannot meet the timing criteria within the project's time and budget.
+
+**Pivot line:** “I change direction if uplink TDoA cannot meet the timing criteria because of unresolved anchor synchronization or clock-correction issues within the project's time and budget. In that case, I will use two-way ranging (TWR) for the physical prototype. Uplink TDoA remains my preferred approach.”
 
 ## Baseline
 
