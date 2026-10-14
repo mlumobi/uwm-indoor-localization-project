@@ -81,12 +81,14 @@ proposal/
 ref/
     DWM3000 Data Sheet.pdf
     HID-whitepaper-UWB-guide-for-decision-makers.pdf
+    qorvo-getting-back-to-basics-with-ultra-wideband-uwb-white-paper.pdf
 ```
 
 - [Project proposal — Word](proposal/UWB_Project_Proposal.docx)
 - [Project proposal — PDF](proposal/UWB_Project_Proposal.pdf)
 - [DWM3000 data sheet](ref/DWM3000%20Data%20Sheet.pdf)
 - [HID UWB whitepaper](ref/HID-whitepaper-UWB-guide-for-decision-makers.pdf)
+- [Qorvo — Getting Back to Basics with Ultra-Wideband (UWB)](ref/qorvo-getting-back-to-basics-with-ultra-wideband-uwb-white-paper.pdf)
 
 The HID whitepaper is retained as a background reference; it was not used as evidence in the current proposal. Setup and execution instructions will be added when runnable software is available.
 
@@ -95,6 +97,7 @@ The HID whitepaper is retained as a background reference; it was not used as evi
 - [EC601_Sprint1](https://docs.google.com/presentation/d/1xGqi0pRQQJJB1kcCf-J-DX_ZKf9MRdXoSHOy6zalLVk/edit?slide=id.p1#slide=id.p1) — recurring reference for this project's Sprint 1 plan. When referring to the "Sprint 1 slides" or "EC601_Sprint1," use this deck. Slide 2 lists the required plan sections, including the primary target user.
 - [EC601 Defining Your Project](https://docs.google.com/presentation/d/1mjnqe2xNa9wXm628SlQiQ_eo9ZSn7dLjxyB_iZE9pWU/edit) — project definition, mission, users, stories, INVEST, thin slicing, and assumption testing.
 - [Qorvo DWM3000 product information](https://www.qorvo.com/products/p/DWM3000) — component capabilities and intended applications.
+- [Qorvo, Getting Back to Basics with Ultra-Wideband (UWB), May 2021](ref/qorvo-getting-back-to-basics-with-ultra-wideband-uwb-white-paper.pdf) — manufacturer white paper explaining UWB timing principles and TWR, TDoA, reverse TDoA, and PDoA topologies. Its TDoA discussion informs the planned synchronized-anchor architecture; general performance claims do not establish this prototype's accuracy, update rate, or battery life.
 - [Espressif ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf) — MCU radio and peripheral capabilities for the selected XIAO ESP32C3 controller; read alongside Seeed's board guide.
 - [Krebs and Herter, 2024](https://arxiv.org/html/2403.10194v1) — an ESP32/DWM3000 TWR prototype and its measured limitations.
 - [Zhao, Goudar, and Schoellig, 2022](https://arxiv.org/abs/2204.04508) — TDoA sensor placement and obstacle-induced measurement bias.

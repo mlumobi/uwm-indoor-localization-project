@@ -122,7 +122,7 @@ I will retain coordinates, timestamps, position states, and alarm logs so the re
 
 ## Related work
 
-I will use these **eight reference documents**, including four research papers, three hardware documents, and one industrial whitepaper, to guide implementation and evaluation. The selected UWB module is **DWM3000**. Results from other systems are background evidence; I will measure my prototype's performance separately.
+I will use these **nine reference documents**, including four research papers, three hardware documents, and two vendor whitepapers, to guide implementation and evaluation. The selected UWB module is **DWM3000**. Results from other systems are background evidence; I will measure my prototype's performance separately.
 
 ### Research papers
 
@@ -142,11 +142,13 @@ I will use these **eight reference documents**, including four research papers, 
 
 7. **Espressif Systems. [ESP32-C3 Series Datasheet](https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf).** Official chip-level reference for electrical characteristics, peripherals, and wireless capabilities. I will read it alongside Seeed's board guide to check controller constraints and distinguish chip capabilities from signals exposed on the XIAO board.
 
-### Industrial whitepaper
+### Vendor whitepapers
 
 8. **HID / Sewio Networks, Lubomir Mraz. [UWB: The Decision-Maker's Guide](https://campaigns.hidglobal.com/all-you-need-to-know-about-ultra-wideband).** Vendor whitepaper on industrial UWB RTLS applications and deployment considerations; a [local copy](../ref/HID-whitepaper-UWB-guide-for-decision-makers.pdf) is retained in this project. It provides context for warehouse and factory monitoring. Its business-benefit and deployment claims are vendor background, not independent evidence of my prototype's accuracy or safety effectiveness.
 
-The EC601 course planning links remain in the README, and the Makerfabs firmware repository remains in the Tooling section. They are supporting resources outside this eight-document Related work list. Uplink TDoA remains my preferred implementation; TWR is the fallback if synchronization cannot meet the timing criteria.
+9. **Qorvo (May 2021). [Getting Back to Basics with Ultra-Wideband (UWB)](../ref/qorvo-getting-back-to-basics-with-ultra-wideband-uwb-white-paper.pdf).** Manufacturer white paper covering UWB timing principles and TWR, TDoA, reverse TDoA, and PDoA topologies. Pages 4–6 explain TWR message exchanges and TDoA's use of synchronized anchor arrival timestamps forwarded to a central location engine. It informs my preferred uplink TDoA architecture and comparison with the TWR fallback. Its accuracy, scalability, and battery-life claims are vendor background, not measured results for my prototype.
+
+The EC601 course planning links remain in the README, and the Makerfabs firmware repository remains in the Tooling section. They are supporting resources outside this nine-document Related work list. Uplink TDoA remains my preferred implementation; TWR is the fallback if synchronization cannot meet the timing criteria.
 
 ## Harm and Risk
 
