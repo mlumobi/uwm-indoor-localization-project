@@ -45,14 +45,14 @@ Planned tools and their purposes:
 | Tool | Purpose and reason | Where used |
 | --- | --- | --- |
 | [KiCad](https://www.kicad.org/about/kicad/) | Draw the wiring schematic and document connections; prepare PCB designs in a later sprint | Developer's laptop |
-| C++ and [VS Code with PlatformIO](https://docs.platformio.org/en/latest/integration/ide/vscode.html), using the Arduino framework | Write, build, upload, and monitor firmware for the anchors and tags; keep board settings and dependencies in a reproducible project configuration | Developer's laptop; firmware runs on the XIAO ESP32C3 |
-| [Espressif Arduino-ESP32 core](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html), including SPI and Wi-Fi libraries | Provide ESP32-C3 board support, communicate with the UWB module over SPI, and forward anchor records over Wi-Fi | Developer's laptop and XIAO ESP32C3 |
-| [DW3000 Arduino driver maintained by Makerfabs](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000) (candidate) | Start from existing UWB communication and ranging examples; adapt pins and verify XIAO ESP32C3 compatibility and receive-timestamp access | XIAO ESP32C3 connected to DWM3000 |
+| C/C++ and [VS Code with the Espressif ESP-IDF extension](https://docs.espressif.com/projects/vscode-esp-idf-extension/en/latest/) | Write, build, upload, and monitor firmware for the anchors and tags; keep board settings and dependencies in a reproducible project configuration | Developer's laptop; firmware runs on the XIAO ESP32C3 |
+| [Espressif ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/index.html), including SPI and Wi-Fi APIs | Provide ESP32-C3 board support, communicate with the UWB module over SPI, and forward anchor records over Wi-Fi | Developer's laptop and XIAO ESP32C3 |
+| [DW3000 Arduino driver maintained by Makerfabs](https://github.com/Makerfabs/Makerfabs-ESP32-UWB-DW3000) (candidate) | Use existing UWB communication and ranging examples as a reference; port the required driver functions to ESP-IDF and verify XIAO ESP32C3 compatibility and receive-timestamp access | XIAO ESP32C3 connected to DWM3000 |
 | Python with NumPy, SciPy, Matplotlib, and pyserial (proposed) | Collect serial test logs, process timing measurements, estimate positions, and plot locations and errors | Developer's laptop |
 | Git and GitHub | Track firmware, schematics, documentation, and measurement logs so changes and results can be reviewed | Developer's laptop and project repository |
 | RASTIC soldering station and multimeter | Assemble module connections; check continuity, shorts, supply voltage, and current during hardware bring-up | RASTIC electronics workspace |
 
-Use PlatformIO board ID `seeed_xiao_esp32c3` with `framework = arduino`. Record and pin the selected PlatformIO platform/core versions and driver commit in the project configuration after the first successful build. The candidate UWB driver's supplied ranging examples do not establish that my TDoA timing and synchronization path works.
+Use ESP-IDF with target `esp32c3` and configure the XIAO ESP32C3 pin assignments. Record and pin the selected ESP-IDF version and driver commit in the project configuration after the first successful build. The candidate UWB driver's supplied ranging examples do not establish that my TDoA timing and synchronization path works.
 
 ## Two Weeks Demo
 
