@@ -1,4 +1,4 @@
-# BU Faculty Relevant to My UWB Indoor Localization Project
+# BU Faculty Relevant to My UWB TDoA Real-time Localization
 
 I selected three professors whose work touches localization reliability, safety under uncertain measurements, and practical evaluation of autonomous systems. I checked BU faculty profiles and lab or publication pages on October 12, 2026. The course Research Areas handout was not available in this project folder, so I used BU's official [Intelligent Autonomy and Robotics research-area page](https://www.bu.edu/eng/academics/departments-and-divisions/systems-engineering/se-research/intelligent-autonomy-and-robotics-2/) and individual faculty profiles as starting points.
 

@@ -1,4 +1,4 @@
-# UWB Indoor Localization Project
+# UWB TDoA Real-time Localization
 
 An EC601 course project to build and evaluate an indoor location system for tagged objects using ultra wideband (UWB) radio and uplink time difference of arrival (TDoA).
 
