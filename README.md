@@ -10,12 +10,12 @@ This is a one-person project. Mingjin Lu is responsible for hardware integration
 
 | Question | Project definition |
 | --- | --- |
-| **What** | A prototype that displays the positions of two tagged objects and shows when a position is stale or invalid. |
-| **Who** | An equipment coordinator is the proposed primary user. The sole developer operates the system, and course staff evaluate its evidence. This user need still requires interviews. |
-| **Why** | Test whether automatic location updates help users find equipment, compared with their current workflow. No productivity improvement has been measured. |
-| **When** | During a supervised course demo. The proposal suggests four one-week sprints; actual deadlines and the solo developer’s available time remain to be confirmed. |
-| **Where** | A surveyed indoor laboratory area with known tag height. Factory and warehouse use are potential later applications requiring separate validation. |
-| **How** | Tags broadcast UWB frames; fixed anchors record arrival timestamps; a computer corrects anchor clocks, calculates time differences, estimates positions, and displays them. |
+| **What** | An indoor monitoring prototype for tagged robots and vehicles, with a live 2D map, distinct tag IDs, position freshness and validity indicators, configurable safety zones, alerts for non-permitted zone entry, abnormal motion and prolonged signal loss, and recorded-movement replay. The physical prototype targets two tags and three anchors; additional tags may be simulated and clearly labeled. |
+| **Who** | The primary target user is a warehouse or factory safety manager overseeing a shared workspace with vehicles, people, robots, and machinery. A robotics engineer also needs to monitor a robot without integrating with its onboard navigation software. Mingjin Lu is the sole developer, with AI assistance; user needs and interface usefulness still require interviews. |
+| **Why** | Help the user see where tagged robots or vehicles are, recognize restricted-zone entries and unreliable tracking information, and review past movement. Evaluate these monitoring functions against measured ground truth and scripted scenarios; improved workplace safety and attack detection are not established outcomes. |
+| **When** | The Sprint 1 two-week demo will show a labeled Python simulation, purchase and delivery progress, and the hardware implementation plan. After parts arrive, bring up the hardware, validate anchor clock correction, demonstrate one physical tag, then add the second tag and evaluate tracking and alerts. |
+| **Where** | The intended application is a shared warehouse or factory workspace. Initial physical evaluation will use a controlled, surveyed indoor test area with known tag height and mapped zone boundaries; assembly and electrical checks are planned at RASTIC. Industrial deployment requires separate validation. |
+| **How** | Start with simulated UWB arrival timestamps to test localization, map display, alerts, and replay. For hardware, use DWM3000 modules with XIAO ESP32C3 controllers: tags broadcast uplink blinks, three anchors record receive timestamps, and a computer corrects anchor clocks using periodic anchor-to-anchor UWB two-way exchanges, calculates TDoA positions, and applies the monitoring rules. Wi-Fi forwards records. Retain position and alert logs, compare accuracy and delay with ground truth, and use tag-to-anchor TWR as the fallback if clock correction fails its timing criteria. |
 
 ## Planned demonstration
 

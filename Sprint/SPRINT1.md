@@ -2,7 +2,7 @@
 
 ## Mission
 
-For a warehouse robotics engineer who needs to monitor multiple mobile robots indoors, the UWB Indoor Localization Project is a tracking prototype that displays robot positions and freshness; unlike integrating separately with each robot’s navigation system, it uses attachable UWB tags to support different robot platforms and expand tracking by adding tags.
+For a warehouse or factory safety manager who needs to monitor people and moving targets, including robots, vehicles, and machines, in a shared indoor workspace, the UWB Indoor Localization Project is a monitoring prototype that displays tagged positions and their freshness, alerts on non-permitted safety-zone entry, abnormal motion, and prolonged signal loss, and replays recorded movement for review. It uses wearable or attachable UWB tags to track people and moving targets without requiring integration with a robot's or machine's onboard navigation software. Sprint 1 starts with a clearly labeled simulation; the physical prototype will be evaluated separately for localization accuracy, tracking delay, and alert behavior before any claims about operational safety use.
 
 ## Target User
 
