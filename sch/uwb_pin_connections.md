@@ -1,24 +1,24 @@
 # XIAO ESP32C3 + DWM3000TR13 Wiring Reference
 
-**Rev 1.2 - 2026-10-27**  
-**Source:** [KiCad schematic](uwm_esp32/uwm_esp32.kicad_sch), schematic blob `cd088ec23374f4d1c9c96b8a9672d03c35a510c2`.  
+**Rev 1.3 - 2026-10-27**  
+**Source:** [KiCad schematic](uwm_esp32/uwm_esp32.kicad_sch), schematic blob `4190eb5a18cd428956c232895af2a99b7d6b81df`.  
 **Status:** Connection reference checked against the schematic nets. KiCad ERC, footprints, PCB layout, and hardware operation have not been validated.
 
 ## DWM3000TR13 24-pin net assignments
 
 | Pin | Module signal | Actual connection | Design note |
 |---:|---|---|---|
-| 1 | EXTON | TP4 | Optional external power-control output; no external load fitted |
+| 1 | EXTON | J2 pin 2 | Optional external power-control output; no external load fitted |
 | 2 | WAKEUP | GND | Unused wake input; SPICSn may wake the device |
 | 3 | RSTn | XIAO D7 / GPIO20 | Active-low reset; configure MCU open-drain, pull LOW / release |
-| 4 | GPIO7 / SYNC | TP3 | Synchronization input available for testing |
+| 4 | GPIO7 / SYNC | J2 pin 3 | Synchronization input available for testing |
 | 5 | VDD1 | 3V3 | AON supply; 3.3 V is supported |
 | 6 | VDD3V3 | 3V3 | Shares the supply decoupling network |
 | 7 | VDD3V3 | 3V3 | Shares the supply decoupling network |
 | 8 | VSS | GND | Common ground |
-| 9 | GPIO6 / SPIPHA | TP6 | Internal pull-down selects CPHA=0 when externally undriven |
-| 10 | GPIO5 / SPIPOL | TP7 | Internal pull-down selects CPOL=0 when externally undriven |
-| 11 | GPIO4 | TP5 | Spare module GPIO |
+| 9 | GPIO6 / SPIPHA | J2 pin 5 | Internal pull-down selects CPHA=0 when externally undriven |
+| 10 | GPIO5 / SPIPOL | J2 pin 6 | Internal pull-down selects CPOL=0 when externally undriven |
+| 11 | GPIO4 | J2 pin 4 | Spare module GPIO |
 | 12 | GPIO3 / TXLED | R6 (1k) -> D6 anode; D6 cathode -> GND | UWB TX activity indicator |
 | 13 | GPIO2 / RXLED | R5 (1k) -> D5 anode; D5 cathode -> GND | UWB RX activity indicator |
 | 14 | GPIO1 / SFDLED | R4 (1k) -> D4 anode; D4 cathode -> GND | Start-frame-delimiter indicator |
@@ -39,7 +39,7 @@ The DWM3000 signal names GPIO0 through GPIO8 are module signals, not ESP32 GPIO 
 
 | XIAO pin | ESP32-C3 GPIO | Actual connection / role |
 |---|---|---|
-| D0 | GPIO2 | TP8 only; spare strapping pin |
+| D0 | GPIO2 | J1 pin 2; spare strapping pin |
 | D1 | GPIO3 | SW1 Sleep Button to GND; R8 (10k) pull-up to 3V3 |
 | D2 | GPIO4 | DWM3000 SPIMISO, pin 19 |
 | D3 | GPIO5 | DWM3000 SPICSn, pin 17 |
@@ -47,8 +47,8 @@ The DWM3000 signal names GPIO0 through GPIO8 are module signals, not ESP32 GPIO 
 | D5 | GPIO7 | DWM3000 SPIMOSI, pin 18 |
 | D6 | GPIO21 | ModeLED net; opposite-state Tag/Anchor LEDs |
 | D7 | GPIO20 | DWM3000 RSTn, pin 3; open-drain control |
-| D8 | GPIO8 | TP1 only; spare strapping pin |
-| D9 | GPIO9 | TP2 only; strapping pin and onboard BOOT button |
+| D8 | GPIO8 | J1 pin 4; spare strapping pin |
+| D9 | GPIO9 | J1 pin 5; strapping pin and onboard BOOT button |
 | D10 | GPIO10 | DWM3000 IRQ, pin 22; R7 (100k) pull-down |
 | 3V3 | — | DWM3000 supply, capacitors, Tag LED supply, and SW1 pull-up |
 | GND | — | Common ground |
@@ -91,7 +91,7 @@ Each LED has its own series resistor. Select actual red and green LED parts duri
 | 13 | RXLED | R5 = 1k | D5 | Receive-mode activity |
 | 12 | TXLED | R6 = 1k | D6 | Transmit activity |
 
-All four branches run from the module output through a resistor to the LED anode, with the LED cathode connected to GND. Enable the corresponding LED functions in the DW3000 driver. Verify resistor values against the selected LEDs and the module GPIO drive specifications before final component selection.
+All four branches run from the module output through a resistor to the LED anode, with the LED cathode connected to GND. Enable the corresponding LED functions in the DW3000 driver. Verify resistor values against the selected LEDs and the module GPIO drive specifications; see the radio LED current finding below.
 
 **Naming:** LED component D6 is distinct from the XIAO header pin named D6.
 
@@ -122,20 +122,51 @@ C1 and C2 share the 3V3 net; this schematic contains one 100nF capacitor, not a 
 
 The drawing uses the XIAO power pins; it does not include a separate external power input connector or battery connector. USB power is supplied through the XIAO board. Verify supply capacity and any future external-power connection before use.
 
-## Test points
+## Expansion headers
 
-| Reference | Connected signal |
-|---|---|
-| TP1 | XIAO D8 / GPIO8 |
-| TP2 | XIAO D9 / GPIO9 |
-| TP3 | DWM3000 GPIO7 / SYNC, pin 4 |
-| TP4 | DWM3000 EXTON, pin 1 |
-| TP5 | DWM3000 GPIO4, pin 11 |
-| TP6 | DWM3000 GPIO6 / SPIPHA, pin 9 |
-| TP7 | DWM3000 GPIO5 / SPIPOL, pin 10 |
-| TP8 | XIAO D0 / GPIO2 |
+The former TP1-TP8 test-point symbols have been replaced by J1 and J2. The tables below follow the **actual connector pin numbers in the schematic**, not the order previously proposed in discussion.
 
-GPIO2, GPIO8, and GPIO9 require attention to startup levels if external circuitry is later attached. SPIPHA and SPIPOL must remain at the intended levels during module startup; with only undriven test points, internal pull-downs select SPI Mode 0.
+Both headers use `Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical` (1x6, 2.54mm pitch). These are footprint assignments, not a confirmation of connector procurement or placement.
+
+### J1 - ESP32 Edge Header
+
+| J1 pin | Net | Connected device pin | Purpose / caution |
+|---:|---|---|---|
+| 1 | +3V3 | XIAO 3V3 | Regulated supply; account for total load |
+| 2 | D0 | XIAO D0 / GPIO2 | Spare digital/ADC pin; startup pull-up recommended |
+| 3 | GND | Common ground | Ground reference |
+| 4 | D8 | XIAO D8 / GPIO8 | Spare GPIO; must be HIGH for download mode |
+| 5 | D9 | XIAO D9 / GPIO9 | Spare GPIO; onboard BOOT button; LOW at reset selects download mode with the appropriate GPIO8 level |
+| 6 | GND | Common ground | Ground reference |
+
+All signal pins use 3.3V logic. No new external pull-ups or isolation resistors are fitted on J1 signals in this schematic. GPIO2, GPIO8, and GPIO9 are strapping pins; attached circuits must respect startup levels. GPIO2 does not determine normal SPI boot versus download boot, but Espressif recommends pulling it HIGH because of glitches.
+
+### J2 - DWM Edge Header
+
+| J2 pin | Net | DWM3000 pin | Purpose / caution |
+|---:|---|---:|---|
+| 1 | GND | VSS / common ground | Ground reference |
+| 2 | EXTON | 1 | Output asserted while the radio is awake; enable-control signal, not a power supply |
+| 3 | SYNC | 4 | External synchronization input / configurable GPIO7 |
+| 4 | GPIO4 | 11 | Spare radio GPIO; distinct from ESP32 GPIO4 used for MISO |
+| 5 | SPIPHA | 9 | SPI phase selection during startup, then configurable GPIO6 |
+| 6 | SPIPOL | 10 | SPI polarity selection during startup, then configurable GPIO5 |
+
+J2 signals connect directly to the module, without added series resistors or buffers. They are controlled by or connected to the DWM3000, not directly to free ESP32 GPIOs. Respect module input/output direction and drive specifications.
+
+For SPI Mode 0, external equipment must not drive SPIPHA or SPIPOL HIGH during module startup. With the header unconnected, internal pull-downs select Mode 0. Use 3.3V-compatible signals and a common GND. Keep expansion routing and connectors outside the antenna keep-out during layout.
+
+## Latest schematic connection review
+
+- J1 pins 1, 3, and 6 correctly connect to +3V3, GND, and GND respectively; its other pins expose D0, D8, and D9.
+- J2 exposes GND, EXTON, SYNC, DWM GPIO4, SPIPHA, and SPIPOL in the order shown above.
+- Reset remains on D7/GPIO20; ModeLED remains on D6/GPIO21.
+- IRQ remains on D10/GPIO10 with R7 = 100k to GND.
+- SW1 retains R8 = 10k to 3V3; C1 = 100nF and C2 = 10uF remain across 3V3 and GND.
+- Tracing the schematic nets found no unintended connection between +3V3, +5V, and GND, or swapped SPI signals.
+- **Radio LED current needs verification:** R3-R6 are still 1k. Qorvo Table 5 lists 0.8mA digital output drive current for GPIOx/IRQ. For example, an ideal 3.3V output and a 2.0V LED imply approximately 1.3mA through 1k. This is an estimate, not a measured current or an absolute-maximum rating. Select R3-R6 from the actual LED specifications and desired current; 2.2k-4.7k is a more conservative starting range for typical indicator LEDs. R1/R2 are driven by the ESP32 and are a separate case.
+- Footprints are now assigned to the headers, switch, LEDs, resistors, and capacitors. Their compatibility with purchased parts has not been verified.
+- KiCad ERC and PCB layout checks have not been run; this review traces connectivity and identifies design follow-ups.
 
 ## Firmware connection summary
 
@@ -165,6 +196,6 @@ Use SPI Mode 0. Update any older firmware definitions that used GPIO21 for reset
 1. Run KiCad ERC and resolve or document its findings.
 2. Select actual LEDs and confirm GPIO drive current, brightness, and sleep consumption.
 3. Select capacitor voltage ratings and confirm supply stability.
-4. Assign and verify footprints when component selection begins.
+4. Verify assigned footprints against the actual purchased components.
 5. During layout, implement module antenna keep-out, grounding, and local decoupling.
 6. Test cold power-up, ESP32-only reset, UWB reset, and sleep/wake behavior on hardware.
