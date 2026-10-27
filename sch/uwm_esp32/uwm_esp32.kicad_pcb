@@ -89,7 +89,6 @@
 		)
 		(capping no)
 		(filling no)
-		(zone_defaults)
 		(grid_origin 157.055 104)
 		(pcbplotparams
 			(layerselection 0x00000000_00000000_55555555_5755f5ff)
@@ -695,7 +694,7 @@
 		(pad "14" thru_hole circle
 			(at 7.62 -7.5565)
 			(size 1.358 1.358)
-			(drill 0.85)
+			(drill 1)
 			(layers "*.Cu" "*.Mask")
 			(remove_unused_layers no)
 			(net "+5V")
@@ -1535,14 +1534,13 @@
 		)
 	)
 	(footprint "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
-		(locked yes)
 		(layer "F.Cu")
 		(uuid "4b2c3a61-e4a8-412f-ac95-e1fa71c67d74")
-		(at 137.0175 66.75 180)
+		(at 137.955 67.6 90)
 		(descr "Capacitor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal with elongated pad for handsoldering. (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf, https://docs.google.com/spreadsheets/d/1BsfQQcO9C6DZCsRaXUlFlo91Tg2WpOkGARC1WS5S8t0/edit?usp=sharing)")
 		(tags "capacitor handsolder")
 		(property "Reference" "C1"
-			(at 0 -1.68 0)
+			(at 0 -1.68 90)
 			(layer "F.SilkS")
 			(hide yes)
 			(uuid "6ea6bb05-beee-4eed-baf7-86a7e2021bf7")
@@ -1554,7 +1552,7 @@
 			)
 		)
 		(property "Value" "100n"
-			(at 3.7875 -0.25 0)
+			(at 3.7875 -0.25 90)
 			(layer "F.Fab")
 			(uuid "4e416a9f-8838-4131-a8f7-13d0214f6526")
 			(effects
@@ -1565,7 +1563,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "0d18b3ca-c313-4e89-b968-23b0bcb9df18")
@@ -1576,7 +1574,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor, small symbol"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "60066c8c-9c30-4114-a4bd-a27a5bb4c241")
@@ -1587,7 +1585,7 @@
 			)
 		)
 		(property "KiLib_Generator" "SMD_2terminal_chip_molded"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.SilkS")
 			(hide yes)
 			(uuid "c520f772-15e6-492f-9347-2057891170d6")
@@ -1611,16 +1609,6 @@
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
-			(start -0.261252 0.735)
-			(end 0.261252 0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(uuid "ff717abc-6e46-4580-85bd-680a9a5741c2")
-		)
-		(fp_line
 			(start -0.261252 -0.735)
 			(end 0.261252 -0.735)
 			(stroke
@@ -1629,6 +1617,16 @@
 			)
 			(layer "F.SilkS")
 			(uuid "28a8d6fa-c900-4e97-b571-29761d52a314")
+		)
+		(fp_line
+			(start -0.261252 0.735)
+			(end 0.261252 0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(uuid "ff717abc-6e46-4580-85bd-680a9a5741c2")
 		)
 		(fp_rect
 			(start -1.88 -0.98)
@@ -1653,7 +1651,7 @@
 			(uuid "5e89e83e-e7be-4c9e-930a-e4431379a3a7")
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(uuid "9e8bd858-f687-4cd2-95f4-17f189b9c4a3")
 			(effects
@@ -1664,7 +1662,7 @@
 			)
 		)
 		(pad "1" smd roundrect
-			(at -1.0375 0 180)
+			(at -1.0375 0 90)
 			(size 1.175 1.45)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.212766)
@@ -1673,7 +1671,7 @@
 			(uuid "b580c12c-e941-4e23-bfa3-04bec0e551fe")
 		)
 		(pad "2" smd roundrect
-			(at 1.0375 0 180)
+			(at 1.0375 0 90)
 			(size 1.175 1.45)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.212766)
@@ -4795,14 +4793,13 @@
 		)
 	)
 	(footprint "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
-		(locked yes)
 		(layer "F.Cu")
 		(uuid "bd9f4821-9f70-4188-8675-aa13c3fc431e")
-		(at 137.0175 63.5 180)
+		(at 140.155 67.6 90)
 		(descr "Capacitor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal with elongated pad for handsoldering. (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf, https://docs.google.com/spreadsheets/d/1BsfQQcO9C6DZCsRaXUlFlo91Tg2WpOkGARC1WS5S8t0/edit?usp=sharing)")
 		(tags "capacitor handsolder")
 		(property "Reference" "C2"
-			(at 0 -1.68 0)
+			(at 0 -1.68 90)
 			(layer "F.SilkS")
 			(hide yes)
 			(uuid "4c238aab-6c54-4a77-8ba4-c1da23a16aa4")
@@ -4814,7 +4811,7 @@
 			)
 		)
 		(property "Value" "10u"
-			(at 3.7875 0 0)
+			(at 3.7875 0 90)
 			(layer "F.Fab")
 			(uuid "b131ecea-8242-48fb-b15b-a53fba1619c6")
 			(effects
@@ -4825,7 +4822,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "6d4442b9-4ba5-4209-a434-7a7035d700a1")
@@ -4836,7 +4833,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor, small symbol"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "4095edb8-f7a5-42c7-9c1e-32d3f555a562")
@@ -4847,7 +4844,7 @@
 			)
 		)
 		(property "KiLib_Generator" "SMD_2terminal_chip_molded"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.SilkS")
 			(hide yes)
 			(uuid "c56fdc32-843b-4867-86a5-2d5de00c1078")
@@ -4871,16 +4868,6 @@
 		(attr smd)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
-			(start -0.261252 0.735)
-			(end 0.261252 0.735)
-			(stroke
-				(width 0.12)
-				(type solid)
-			)
-			(layer "F.SilkS")
-			(uuid "e90d4552-27f7-437e-b44e-969b1d8ec9a0")
-		)
-		(fp_line
 			(start -0.261252 -0.735)
 			(end 0.261252 -0.735)
 			(stroke
@@ -4889,6 +4876,16 @@
 			)
 			(layer "F.SilkS")
 			(uuid "fb1f0575-d77f-499c-b24e-7d4eae80fd51")
+		)
+		(fp_line
+			(start -0.261252 0.735)
+			(end 0.261252 0.735)
+			(stroke
+				(width 0.12)
+				(type solid)
+			)
+			(layer "F.SilkS")
+			(uuid "e90d4552-27f7-437e-b44e-969b1d8ec9a0")
 		)
 		(fp_rect
 			(start -1.88 -0.98)
@@ -4913,7 +4910,7 @@
 			(uuid "d614512c-972f-42c0-8b24-00210b08827a")
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
+			(at 0 0 90)
 			(layer "F.Fab")
 			(uuid "33e0cfc2-cf07-4b2a-8140-15b0316f8e08")
 			(effects
@@ -4924,7 +4921,7 @@
 			)
 		)
 		(pad "1" smd roundrect
-			(at -1.0375 0 180)
+			(at -1.0375 0 90)
 			(size 1.175 1.45)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.212766)
@@ -4933,7 +4930,7 @@
 			(uuid "2c5b0d31-b982-4f78-b9df-d36db8cecce9")
 		)
 		(pad "2" smd roundrect
-			(at 1.0375 0 180)
+			(at 1.0375 0 90)
 			(size 1.175 1.45)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(roundrect_rratio 0.212766)
