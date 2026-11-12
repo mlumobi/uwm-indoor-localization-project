@@ -4689,7 +4689,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 193.294 96.774 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4924,7 +4924,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 193.548 109.474 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5160,7 +5160,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 193.294 103.124 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5715,7 +5715,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 193.548 115.824 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6118,7 +6118,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 72.39 112.522 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6629,7 +6629,7 @@
 				)
 			)
 		)
-		(property "Value" "1k"
+		(property "Value" "330"
 			(at 72.39 96.52 90)
 			(show_name no)
 			(do_not_autoplace no)
