@@ -1,6 +1,8 @@
 #include <inttypes.h>
 
 #include "driver/gpio.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -18,6 +20,7 @@ enum {
     BUTTON_LONG_PRESS_US = 1000000,
 };
 
+typedef struct {
     bool sampled_pressed;
     bool stable_pressed;
     int64_t sampled_since_us;
@@ -50,6 +53,17 @@ static void sample_button(button_test_t *button, bool pressed, int64_t now_us)
 
 void app_main(void)
 {
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    usb_serial_jtag_driver_config_t console_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    esp_err_t console_err = usb_serial_jtag_driver_install(&console_config);
+    if (console_err == ESP_OK) {
+        // The interrupt-driven console terminates full 64-byte USB transfers.
+        usb_serial_jtag_vfs_use_driver();
+    } else {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(console_err);
+    }
+#endif
+
     ESP_LOGI(TAG, "Indoor localization firmware started on ESP32-C3");
 
     // SW1 shorts GPIO3 to ground. The internal pull-up supplements PCB resistor R8.
