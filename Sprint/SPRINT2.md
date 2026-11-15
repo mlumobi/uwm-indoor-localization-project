@@ -2,28 +2,28 @@
 
 ## Scope and objective
 
-Sprint 2 advances **UWB TDoA Real-time Localization** from project planning to a documented hardware design for the shared tag/anchor node. The target user remains a warehouse or factory safety manager who needs to monitor tagged robots and vehicles on one indoor map.
+Sprint 2 advances **UWB TDoA Real-time Localization** from project planning to a fabricated shared tag/anchor PCB and a two-node UWB ranging prototype. The target user remains a warehouse or factory safety manager who needs to monitor tagged robots and vehicles on one indoor map.
 
-This report covers repository changes after the latest [Sprint 1 plan](SPRINT1.md) update, commit `3ba8cbd` on **October 15, 2026**, through commit `d1c8b9b` on **November 11, 2026**. The schematic and PCB development commits are dated October 27, followed by a schematic resistor-value revision on November 11. The repository was reviewed on **November 14, 2026**; these dates describe the available commit history, not an inferred sprint schedule.
+This report covers repository changes after the latest [Sprint 1 plan](SPRINT1.md) update, commit `3ba8cbd` on **October 15, 2026**, through commit `d1c8b9b` on **November 11, 2026**. The schematic and PCB development commits are dated October 27, followed by a schematic resistor-value revision on November 11. Bench work on **November 14, 2026** adds assembly, firmware, and hardware test results to that design history.
 
-**Result:** A KiCad schematic, local component libraries, a wiring reference, and a PCB layout with routed copper and ground pours are now committed. Firmware, physical bring-up, anchor clock correction, and measured localization performance remain unverified.
+**Result:** Two ESP32-C3/DWM3000 nodes exchanged UWB packets and reported two-way distance estimates. The ESP-IDF firmware supports Wi-Fi configuration and short- and long-press diagnostics on SW1. Distance accuracy and multi-anchor TDoA remain open.
 
 ## Progress beyond Sprint 1
 
 | Area | Sprint 1 baseline | Added in Sprint 2 | Current status |
 | --- | --- | --- | --- |
-| Shared node hardware | Proposed XIAO ESP32C3 and DWM3000 hardware for tags and anchors | KiCad project and schematic connecting both devices, power, indicators, and a sleep/wake button | Design files committed; hardware operation unverified |
-| Electrical interface | Planned SPI communication and timestamp access | Pin-by-pin wiring reference, reset and mode-LED pin revisions, IRQ pull-down, button pull-up, and a later LED resistor revision | Connections documented; resistor values need reconciliation across artifacts |
+| Shared node hardware | Proposed XIAO ESP32C3 and DWM3000 hardware for tags and anchors | KiCad project and schematic connecting both devices, power, indicators, and a sleep/wake button | Two assembled nodes initialized their DWM3000 radios and completed 25 consecutive ranging exchanges. |
+| Electrical interface | Planned SPI communication and timestamp access | Pin-by-pin wiring reference, reset and mode-LED pin revisions, IRQ pull-down, button pull-up, and a later LED resistor revision | SPI and SW1 verified on the bench. External SW1 pull-up and LED resistor values need review. |
 | Expansion access | No committed node schematic or expansion connectors | Two six-pin headers exposing spare MCU pins and radio signals, including SYNC | Header assignments committed; external circuits untested |
-| PCB | PCB design deferred to a later sprint | Component placement, board outline, mounting holes, copper routing, vias, ground pours, and a keep-out area | Layout developed; ERC/DRC and fabrication readiness unverified |
+| PCB | PCB design deferred to a later sprint | Component placement, board outline, mounting holes, copper routing, vias, ground pours, and a keep-out area | PCB fabricated and populated. ERC, DRC, and post-assembly electrical checks remain open. |
 | Component libraries | Hardware references and purchase plan | Custom symbols and project-local footprints for the XIAO and DWM3000 | Libraries committed; physical fit still needs checking |
-| Tracking software and evaluation | User stories, acceptance criteria, proposed Python simulation, and an archived browser visualization | No new firmware, localization implementation, or measurement logs in this comparison | Sprint 1 functional acceptance criteria remain open |
+| Tracking software and evaluation | User stories, acceptance criteria, proposed Python simulation, and an archived browser visualization | Added ESP-IDF firmware, SW1 press diagnostics, persistent node settings, and a two-node ranging test | Two-way distance estimates verified on hardware. Sprint 1 tracking acceptance criteria remain open. |
 
 ## Completed design work
 
 ### 1. Shared XIAO ESP32C3 / DWM3000 schematic
 
-The [KiCad schematic](../sch/uwm_esp32/uwm_esp32.kicad_sch) now defines one core board intended to support either the tag or anchor role. Role selection is planned through firmware or a software interface; the schematic does not contain a separate role-selection button.
+The [KiCad schematic](../sch/uwm_esp32/uwm_esp32.kicad_sch) now defines one core board intended to support either the tag or anchor role. The Wi-Fi dashboard selects the role, and the firmware applies it to ranging and drives the mode LED output.
 
 The design includes:
 
@@ -83,15 +83,15 @@ These artifacts establish layout progress. They do not establish complete connec
 
 ### 5. Later schematic resistor revision
 
-Commit `d1c8b9b` on November 11 changes R1–R6 from **1 kΩ to 330 Ω** in the schematic and adds a dated KiCad backup archive. The PCB and wiring reference still specify 1 kΩ, so this revision has not been propagated across all design artifacts. The changed values document a design choice, not measured LED current or validated GPIO loading. Reconcile the intended values and verify the electrical limits before assembly or fabrication.
+Commit `d1c8b9b` on November 11 changes R1–R6 from **1 kΩ to 330 Ω** in the schematic and adds a dated KiCad backup archive. The PCB and wiring reference still specify 1 kΩ, so this revision has not been propagated across all design artifacts. The changed values document a design choice, not measured LED current or validated GPIO loading. Reconcile the intended values, check the resistors fitted on the assembled boards, and verify the electrical limits.
 
 ## Status of the Sprint 1 user stories
 
-Hardware design supports the original stories, but none can be marked accepted from the added repository evidence.
+The hardware and two-node ranging results support the original stories. All five tracking acceptance tests remain open.
 
 | Sprint 1 story | Evidence and remaining work |
 | --- | --- |
-| One tag on an indoor map | Hardware interface is now defined. No new timestamp-to-position solver, three-position error report, or freshness test is committed. |
+| One tag on an indoor map | One tag and one anchor returned pairwise distance estimates. A position solver, measured position error, and a freshness test are still needed. |
 | Two distinct tracked tags | The shared board is intended for both node roles. No new crossing-path test, per-tag update-rate report, or physical two-tag test is committed. |
 | Restricted-zone alerts | No new implementation or acceptance log for permitted IDs, entry-event handling, or stale/invalid suppression is committed. |
 | Abnormal motion and prolonged signal loss | No new speed-threshold logic, loss-timeout implementation, or scenario results are committed. |
@@ -99,17 +99,48 @@ Hardware design supports the original stories, but none can be marked accepted f
 
 The existing [browser visualization archive](../work/uwb-site.tar.gz) was added in `3ba8cbd`, so it belongs to the comparison baseline rather than the new Sprint 2 work. Its HTML contains three anchors, two manually movable tags, a rectangular danger zone, and ideal arrival-time calculations. It explicitly states that times are generated from the dragged position and that no position solver is applied. Static source inspection of this archive does not establish completion of the planned Python simulation or the Sprint 1 acceptance tests.
 
+## November 14, 2026 bench log
+
+### Assembly and firmware setup
+
+- The PCB was fabricated, the DWM3000 was soldered, and the XIAO ESP32C3 was attached. Two ESP32-C3 boards were connected to the Windows PC over USB for the ranging test.
+- Installed ESP-IDF v6.1 and Espressif's VS Code extension v2.3.0 in the `ESPIDF` profile. The [firmware project](../firmware/README.md) targets `esp32c3` with 4 MB flash and uses the native USB Serial/JTAG console. The starter build and final ranging build both passed. Verified the final application in flash on both boards.
+- The second board initially ran an Arduino build on the ESP32-C3. Both boards ran the ESP-IDF project by the time of the ranging test. Their USB identities and final roles are listed below.
+
+### DWM3000 SPI and SW1
+
+- The starter SPI diagnostic backed up the original `COM3` flash before programming. It reset the DWM3000 via open-drain GPIO20 and read `0xDECA0302` five times at 1 MHz in SPI mode 0. Both boards later returned that same chip-model ID. The ESP32-C3 runs the driver and controls the DWM3000 over SPI.
+- SW1 on `COM3` uses active-low GPIO3. The pin initially read LOW at startup. Enabling the ESP32-C3's internal pull-up restored the HIGH idle state and allowed the physical switch to report three short presses (150, 160, and 190 ms) and one long press (2,830 ms). The [button diagnostic](../firmware/README.md#sw1-button-test) uses 30 ms debounce and reports the duration on release. The long-press threshold is 1,000 ms. The PCB's external pull-up path still needs an electrical check.
+
+### Wi-Fi configuration
+
+- The [configuration dashboard](../firmware/README.md#wi-fi-configuration-dashboard) runs at `http://192.168.4.1` on each board's setup network. It lets the user edit the role, label, and Node ID and saves them to flash. A role change updates the mode LED output and takes effect in the ranging task between exchanges.
+- The setup SSID uses the last six hexadecimal digits of the ESP32 Wi-Fi MAC and stays the same when the label changes. The default Node ID comes from the last two MAC bytes, with a fallback for reserved values. Assign a distinct Node ID to each board. The dashboard displays the ESP32 MAC and the DWM3000 chip-model ID for diagnostics.
+- Tested the dashboard from the PC on `COM3`. It rejected invalid values and reloaded a saved role, label, and Node ID after reboot. Later switched the project to a shared bench Wi-Fi password and verified the PC could reconnect to `COM3` and read its settings. Windows could see both access points during ranging setup. Assigned `COM4` its Anchor role over USB when the PC could not connect to its dashboard and verified that the role persisted after loading the standard firmware.
+
+### Two-board UWB ranging
+
+| USB port | ESP32 MAC suffix | Setup SSID | Role | Node ID |
+| --- | --- | --- | --- | ---: |
+| `COM3` | `BA:EC` | `UWM-FABAEC` | Tag | 47852 |
+| `COM4` | `F2:AC` | `UWM-FAF2AC` | Anchor | 62124 |
+
+- Integrated the [DW3110 driver](../firmware/components/dw3110/README.md) at pinned revision `67dfbb7`. The double-sided two-way ranging (DS-TWR) exchange uses UWB channel 5. The tag sends a poll, the anchor responds, the tag sends a final frame, and the anchor reports its timing intervals. The tag computes distance from both radios' hardware timestamps.
+- Fixed a startup fault by initializing the driver's private state before reading radio status through the driver. Keeping the anchor receiver enabled between host polls resolved the repeated missed exchanges.
+- In the final run, the first attempt timed out during startup. Then both serial logs matched for **25 consecutive exchanges**, sequence numbers 1–25. The tag reported a median of **0.704 m** and a range of **0.633–0.800 m**. The physical separation was unmeasured and antenna delays used nominal values, so accuracy remains unverified.
+- To repeat the [ranging test](../firmware/README.md#two-way-ranging), power both boards and open **ESP-IDF: Monitor Device** on the tag at 115200 baud. The tag publishes estimates about once a second and the anchor logs matching replies.
+
 ## Review and validation
 
 Repository review compared `3ba8cbd..d1c8b9b`, inspected the schematic and PCB data, checked the local footprints, and read the wiring reference and archived visualization source. The design details above describe the saved files, not measured hardware behavior.
 
 **ERC/DRC remain unverified.** During this review, both checks were attempted with the installed KiCad CLI **9.0.2**. The schematic and board declare generator version **10.0**, and the CLI returned “Failed to load schematic” and “Failed to load board.” No successful ERC or DRC report was produced. Repeat the checks with a compatible KiCad version; these load failures are not electrical-rule results.
 
-The repository contains no new evidence confirming component orders or receipt, assembly, successful firmware builds, packet exchange, receive-timestamp logging, current consumption, or localization accuracy. The Sprint 1 budget remains a purchase plan rather than proof of spending.
+The bench tests used USB-powered boards. Calibrated distance accuracy, raw timestamp logging for TDoA, multi-anchor clock correction, and power consumption remain to be measured. The Sprint 1 budget records planned purchases.
 
 ## Remaining risks and lessons
 
-- **The critical timing assumption is still open.** A schematic, routed board, and SYNC header do not demonstrate comparable anchor timestamps. Uplink TDoA remains the preferred approach, with TWR as the documented fallback.
+- **The critical timing assumption is still open.** Two-board ranging establishes a TWR fallback. Uplink TDoA still needs comparable timestamps from multiple anchors and a measured clock-correction residual.
 - **LED resistor values and radio GPIO loading need review.** The schematic now specifies 330 Ω for R1–R6, while the PCB and wiring reference retain 1 kΩ. The wiring review already identified a possible mismatch between 1 kΩ radio LED resistors and the DWM3000 GPIO drive specification, recommending evaluation of 2.2–4.7 kΩ against the actual LEDs. Lowering resistance to 330 Ω increases the expected load at the same output and LED voltages. Confirm the intended values and allowable drive current, then synchronize the schematic, PCB, and wiring reference.
 - **Layout and assembly checks are still required.** Verify antenna keep-out, grounding, decoupling placement, supply capacity, connector orientation, and footprint fit against the actual parts. The mounting-hole footprints also retain placeholder references.
 - **Hardware work moved ahead of the original feasibility sequence.** Sprint 1 recommended testing timestamp access and clock correction before PCB and interface work. Sprint 2 developed the PCB first; the timing risk therefore remains unresolved despite the additional design work.
@@ -117,11 +148,11 @@ The repository contains no new evidence confirming component orders or receipt, 
 
 ## Next sprint priorities
 
-These are proposed follow-up tasks, not completed Sprint 2 results.
+The next sprint can build on the two-node ranging test.
 
-1. **Validate the electrical design with compatible KiCad tooling.** Reconcile the LED resistor values and verify GPIO loading, then run ERC and DRC, inspect schematic/PCB consistency, resolve or document findings, verify footprints and antenna clearance, and retain review reports before generating fabrication outputs.
-2. **Create a reproducible ESP-IDF bring-up project.** Target `esp32c3`, use the reviewed GPIO assignments, pin the ESP-IDF version and selected driver commit, and demonstrate SPI device identification, reset, IRQ, LEDs, and button behavior. Record USB-powered supply and continuity checks.
-3. **Verify packet exchange and timestamp access.** Start with two nodes, then use one tag and two anchors. Retain tag IDs, sequence numbers, raw receive timestamps, and diagnostics so receptions can be matched and missing frames counted.
+1. **Validate the electrical design with compatible KiCad tooling.** Reconcile the LED resistor values and verify GPIO loading, then run ERC and DRC, inspect the assembled boards against the layout, and record findings before the next board revision.
+2. **Finish board bring-up checks.** Verify the SW1 external pull-up, IRQ behavior, LEDs, and sleep/wake behavior. Record USB-powered supply and continuity checks.
+3. **Calibrate TWR and extend timestamp logging.** Measure antenna-to-antenna distances, calibrate antenna delays, and check ranging error and exchange completion across multiple separations. Then exercise one tag and two anchors and retain IDs, sequence numbers, raw receive timestamps, and diagnostics for clock-correction evaluation.
 4. **Run the Sprint 1 timing feasibility gate.** After packet exchange and logging work, time-box clock-correction evaluation to two focused work sessions and record the hours. At each evaluation position, require at least 95% matched reception and a 95th-percentile absolute timing residual no greater than 1 ns. If the gate cannot be met within the project constraints, document the TWR fallback decision.
 5. **Complete the simulation and tracking acceptance evidence.** Implement the timestamp-to-position calculation and record the original map, identity, freshness, zone, motion, loss, and replay tests. After timing feasibility is established, expand to three anchors and one physical tag, then add the second tag and collect the planned ground-truth measurements.
 
@@ -138,4 +169,4 @@ These are proposed follow-up tasks, not completed Sprint 2 results.
 | `028a430`, `f86ac31`, `421d775` | Connection, D0, IRQ, and SPI routing refinements |
 | `d1c8b9b` | Schematic R1–R6 revision to 330 Ω and a dated design backup; PCB and wiring-reference values remain unchanged |
 
-Commit `b15fabe` adds a KiCad schematic lock file; it is not a functional hardware milestone. The reviewed endpoint is `d1c8b9b`.
+Commit `b15fabe` adds a KiCad schematic lock file; it is not a functional hardware milestone. The reviewed design history ends at `d1c8b9b`. The November 14 bench log records the subsequent hardware and firmware work.

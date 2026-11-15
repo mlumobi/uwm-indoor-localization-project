@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>UWM Node Setup</title>
+  <style>
+    :root {
+      font: 16px/1.5 Inter, "Segoe UI", system-ui, sans-serif;
+      color: #162d31;
+      background: #edf4f2;
+      --muted: #486265;
+      --line: #d6e3df;
+      --accent: #0b6a5e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #123536; color: #fff; padding: 2.8rem 1.25rem 3.35rem; }
+    .container { max-width: 63rem; margin: 0 auto; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(2rem, 6vw, 2.8rem); line-height: 1.15; letter-spacing: -.04em; }
+    header p { color: #b9dad3; margin-top: .5rem; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      gap: 1.25rem;
+      padding: 0 1.25rem 2rem;
+      margin-top: -1.2rem;
+      align-items: start;
+    }
+    section {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: .9rem;
+      padding: 1.5rem;
+      box-shadow: 0 4px 20px #12353609;
+    }
+    h2 { font-size: 1.25rem; letter-spacing: -.02em; margin-bottom: 1.15rem; }
+    fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
+    label, legend { font-weight: 650; }
+    .roles { display: grid; grid-template-columns: repeat(2, 1fr); gap: .65rem; margin-top: .45rem; }
+    .roles label {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      border: 1px solid var(--line);
+      border-radius: .55rem;
+      padding: .7rem .8rem;
+    }
+    .roles label:has(:checked) { border-color: var(--accent); background: #edf8f4; }
+    input[type="radio"] { margin: 0; accent-color: var(--accent); }
+    .field { margin-top: 1rem; }
+    .field input {
+      display: block;
+      width: 100%;
+      padding: .65rem .75rem;
+      margin-top: .4rem;
+      border: 1px solid #a8bfba;
+      border-radius: .5rem;
+      color: inherit;
+      font: inherit;
+      background: #fff;
+    }
+    :focus-visible { outline: 3px solid #43a391; outline-offset: 2px; }
+    .help, dt { color: var(--muted); font-size: .875rem; }
+    .help { margin-top: .3rem; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem .85rem; margin-top: 1.15rem; }
+    button { border: 0; border-radius: .5rem; background: var(--accent); color: #fff; padding: .65rem 1rem; font: inherit; font-weight: 650; }
+    button:enabled { cursor: pointer; }
+    button:disabled { opacity: .55; }
+    #status { font-size: .875rem; }
+    #status[data-error] { color: #a12727; }
+    dl { margin: 0 0 1.15rem; }
+    dl div { border-bottom: 1px solid var(--line); margin: 0; padding: .65rem 0; }
+    dl div:first-child { padding-top: 0; }
+    dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+    .id { font-family: "IBM Plex Mono", Consolas, monospace; }
+    @media (max-width: 660px) {
+      .layout { grid-template-columns: 1fr; gap: .8rem; }
+      section { padding: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>UWM Node Setup</h1>
+      <p id="network">Connecting to the board…</p>
+    </div>
+  </header>
+  <main class="layout container">
+    <section aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Node settings</h2>
+      <form id="settings">
+        <fieldset id="fields" disabled>
+          <fieldset aria-describedby="role-help">
+            <legend>Role</legend>
+            <div class="roles">
+              <label><input type="radio" name="role" value="tag" required> Tag</label>
+              <label><input type="radio" name="role" value="anchor"> Anchor</label>
+            </div>
+            <p class="help" id="role-help">A Tag initiates a range measurement. An Anchor responds.</p>
+          </fieldset>
+          <div class="field">
+            <label for="label">Device label</label>
+            <input id="label" name="label" required maxlength="32" aria-describedby="label-help">
+            <p class="help" id="label-help">Up to 32 characters. Use letters, digits, spaces, periods, dashes, or underscores.</p>
+          </div>
+          <div class="field">
+            <label for="node-id">Node ID</label>
+            <input id="node-id" name="id" type="number" required min="1" max="65534" step="1" aria-describedby="id-help">
+            <p class="help" id="id-help">Choose a different ID for each board, from 1 to 65534.</p>
+          </div>
+        </fieldset>
+        <div class="actions">
+          <button id="save" disabled>Save settings</button>
+          <p id="status" role="status" aria-live="polite">Loading settings…</p>
+        </div>
+      </form>
+    </section>
+    <section aria-labelledby="board-heading">
+      <h2 id="board-heading">Board details</h2>
+      <dl>
+        <div><dt>ESP32 MAC address</dt><dd class="id" id="mac">—</dd></div>
+        <div><dt>DWM3000 device ID</dt><dd class="id" id="radio">—</dd></div>
+        <div><dt>SPI status</dt><dd id="spi">Checking…</dd></div>
+      </dl>
+      <button type="button" id="refresh">Refresh board status</button>
+    </section>
+  </main>
+  <script>
+    const form = document.getElementById("settings");
+    const fields = document.getElementById("fields");
+    const save = document.getElementById("save");
+    const refresh = document.getElementById("refresh");
+    const status = document.getElementById("status");
+    let settingsLoaded = false;
+
+    function message(text, error = false) {
+      status.textContent = text;
+      status.toggleAttribute("data-error", error);
+    }
+
+    function displayBoard(data) {
+      document.getElementById("network").textContent = data.ssid;
+      document.getElementById("mac").textContent = data.mac;
+      document.getElementById("radio").textContent = data.radioId;
+      document.getElementById("spi").textContent =
+        data.radioId === "0xDECA0302" ? "Device ID verified" : "Expected device ID unavailable";
+    }
+
+    function fillForm(data) {
+      form.elements.role.value = data.role;
+      form.elements.label.value = data.label;
+      form.elements.id.value = data.id;
+      settingsLoaded = true;
+    }
+
+    async function requestSettings(options) {
+      const response = await fetch("/api/settings", { cache: "no-store", ...options });
+      if (!response.ok) throw new Error(await response.text());
+      return response.json();
+    }
+
+    async function load() {
+      refresh.disabled = true;
+      try {
+        const data = await requestSettings();
+        displayBoard(data);
+        if (!settingsLoaded) {
+          fillForm(data);
+          fields.disabled = save.disabled = false;
+          message("");
+        }
+      } catch (error) {
+        message("Could not reach the board. Check your Wi-Fi connection and refresh.", true);
+      } finally {
+        refresh.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const label = form.elements.label.value.trim();
+      if (!/^[A-Za-z0-9 ._-]{1,32}$/.test(label) || !/[A-Za-z0-9]/.test(label)) {
+        message("Enter a label with at least one letter or digit.", true);
+        return;
+      }
+      const body = [form.elements.role.value, String(form.elements.id.valueAsNumber), label].join("\n");
+      fields.disabled = save.disabled = refresh.disabled = true;
+      message("Saving…");
+      try {
+        const data = await requestSettings({
+          method: "PUT",
+          headers: { "Content-Type": "application/vnd.uwm.settings" },
+          body
+        });
+        fillForm(data);
+        displayBoard(data);
+        message("Saved to the board.");
+      } catch (error) {
+        message("Save could not be confirmed. Check the connection and try again.", true);
+      } finally {
+        fields.disabled = save.disabled = refresh.disabled = false;
+      }
+    });
+
+    refresh.addEventListener("click", load);
+    load();
+  </script>
+</body>
+</html>

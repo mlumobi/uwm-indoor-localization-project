@@ -1,0 +1,6 @@
+/build/
+/sdkconfig
+/sdkconfig.old
+
+# VS Code stores the local SDK path and COM port here.
+/.vscode/settings.json
