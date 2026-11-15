@@ -76,6 +76,11 @@
     dl div:first-child { padding-top: 0; }
     dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
     .id { font-family: "IBM Plex Mono", Consolas, monospace; }
+    .ranging { grid-column: 1 / -1; }
+    .ranging h2 { margin-bottom: .4rem; }
+    .range-value { font-size: clamp(2.25rem, 7vw, 3.6rem); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .range-value span { color: var(--muted); font-size: .5em; }
+    #range-pair { margin-top: .45rem; font-size: .875rem; }
     @media (max-width: 660px) {
       .layout { grid-template-columns: 1fr; gap: .8rem; }
       section { padding: 1.15rem; }
@@ -90,6 +95,12 @@
     </div>
   </header>
   <main class="layout container">
+    <section class="ranging" aria-labelledby="ranging-heading">
+      <h2 id="ranging-heading">Live TWR distance</h2>
+      <p class="range-value"><output id="distance" aria-live="off">—</output> <span>m</span></p>
+      <p class="help" id="range-status" role="status">Waiting for ranging data…</p>
+      <p id="range-pair" hidden></p>
+    </section>
     <section aria-labelledby="settings-heading">
       <h2 id="settings-heading">Node settings</h2>
       <form id="settings">
@@ -135,6 +146,12 @@
     const save = document.getElementById("save");
     const refresh = document.getElementById("refresh");
     const status = document.getElementById("status");
+    const distance = document.getElementById("distance");
+    const rangeStatus = document.getElementById("range-status");
+    const rangePair = document.getElementById("range-pair");
+    const dwTimeUnitSeconds = 1 / 499.2e6 / 128;
+    const propagationSpeedMetersPerSecond = 299702547;
+    const maxRangeAgeMs = 3000;
     let settingsLoaded = false;
 
     function message(text, error = false) {
@@ -180,6 +197,44 @@
       }
     }
 
+    function distanceMeters(sample) {
+      const { roundATicks, roundBTicks, replyATicks, replyBTicks } = sample;
+      // The products can exceed Number's exact integer range before subtraction.
+      const numerator = BigInt(roundATicks) * BigInt(roundBTicks) -
+        BigInt(replyATicks) * BigInt(replyBTicks);
+      const tofTicks = Number(numerator) / (roundATicks + roundBTicks + replyATicks + replyBTicks);
+      return tofTicks * dwTimeUnitSeconds * propagationSpeedMetersPerSecond;
+    }
+
+    function displayRange(message, sample = null) {
+      distance.textContent = sample === null ? "—" : distanceMeters(sample).toFixed(3);
+      if (rangeStatus.textContent !== message) rangeStatus.textContent = message;
+      rangePair.hidden = sample === null;
+      rangePair.textContent = sample === null ? "" :
+        `Tag ${sample.tagId} → Anchor ${sample.anchorId} · Sequence ${sample.sequence}`;
+    }
+
+    async function refreshRange() {
+      try {
+        const response = await fetch("/api/twr", { cache: "no-store", signal: AbortSignal.timeout(1500) });
+        if (!response.ok) throw new Error("Ranging data unavailable");
+        const { role, sample } = await response.json();
+        if (role === "anchor") {
+          displayRange("Connect to the tag’s Wi-Fi to view distance.");
+        } else if (sample === null) {
+          displayRange("Waiting for the first exchange with an anchor…");
+        } else if (sample.ageMs >= maxRangeAgeMs) {
+          displayRange("No recent exchange. Check that the anchor is powered and in range.");
+        } else {
+          displayRange("Uncalibrated estimate", sample);
+        }
+      } catch (error) {
+        displayRange("Could not read ranging data. Check your Wi-Fi connection.");
+      } finally {
+        setTimeout(refreshRange, 500);
+      }
+    }
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const label = form.elements.label.value.trim();
@@ -208,6 +263,7 @@
 
     refresh.addEventListener("click", load);
     load();
+    refreshRange();
   </script>
 </body>
 </html>

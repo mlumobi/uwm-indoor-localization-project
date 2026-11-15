@@ -25,12 +25,14 @@ Each board keeps its settings in flash across restarts. A save updates the role 
 
 ## Two-way ranging
 
-1. Flash this firmware on both boards. Use the Wi-Fi dashboards to set one board to **Tag**, the other to **Anchor**, and give them different Node IDs.
-2. Place the boards with a clear line of sight. Open the serial monitor on the tag at 115200 baud. The tag reports one distance estimate per completed exchange. The anchor logs its replies.
-3. Compare the readings at measured antenna-to-antenna distances before using them for localization.
+1. Flash the updated firmware on the tag. When setting up a fresh pair, flash both boards. Set one board to **Tag**, the other to **Anchor**, and give them different Node IDs in their Wi-Fi dashboards.
+2. Power both boards and place them with a clear line of sight. Connect the computer to the **tag's** `UWM-xxxxxx` Wi-Fi network. With the November 14 bench roles, this is `UWM-FABAEC`. Use the password `88888888`.
+3. Open [http://192.168.4.1](http://192.168.4.1) and check **Live TWR distance**. The page shows the distance in meters, tag and anchor IDs, and the UWB exchange sequence. The tag attempts an exchange roughly once per second. The display clears once the latest sample is at least three seconds old.
+4. Move the boards through several measured antenna-to-antenna separations and compare the browser estimates with those measurements. The firmware uses nominal antenna delays, so the estimates may show bias.
 
-The bench firmware uses double-sided two-way ranging on UWB channel 5. The tag sends a poll, the anchor replies, the tag sends a final frame, and the anchor reports its measured timestamp intervals. The tag calculates the range from both radios' hardware timestamps. The initial poll is broadcast, so this test uses one tag and one anchor. Antenna delays use nominal values. Range estimates are uncalibrated and can show bias at short separations.
+The bench firmware uses double-sided two-way ranging on UWB channel 5. The tag sends a poll, the anchor responds, the tag sends a final frame, and the anchor reports its measured round-trip and reply intervals. The tag serves all four intervals in DW3110 ticks at `GET /api/twr`. JavaScript in the computer's browser calculates time of flight and distance from those intervals. See [Decawave application note APS013](https://forum.qorvo.com/uploads/short-url/x34DrF7EW5fQP9wY3aNESqPKz8z.pdf).
 
+The initial poll is broadcast, so this test uses one tag and one anchor. The computer only joins the tag's Wi-Fi. A USB serial connection is optional during ranging. At 115200 baud, the tag logs a local distance estimate and the anchor logs its replies for comparison by exchange sequence.
 
 ## SW1 button test
 

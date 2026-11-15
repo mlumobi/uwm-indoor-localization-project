@@ -6,7 +6,7 @@ Sprint 2 advances **UWB TDoA Real-time Localization** from project planning to a
 
 This report covers repository changes after the latest [Sprint 1 plan](SPRINT1.md) update, commit `3ba8cbd` on **October 15, 2026**, through commit `d1c8b9b` on **November 11, 2026**. The schematic and PCB development commits are dated October 27, followed by a schematic resistor-value revision on November 11. Bench work on **November 14, 2026** adds assembly, firmware, and hardware test results to that design history.
 
-**Result:** Two ESP32-C3/DWM3000 nodes exchanged UWB packets and reported two-way distance estimates. The ESP-IDF firmware supports Wi-Fi configuration and short- and long-press diagnostics on SW1. Distance accuracy and multi-anchor TDoA remain open.
+**Result:** Two ESP32-C3/DWM3000 nodes exchanged UWB packets and reported two-way distance estimates over USB. The firmware now also serves TWR timing intervals over Wi-Fi for distance calculation in the computer's browser. The wireless hardware test, distance accuracy, and multi-anchor TDoA remain open.
 
 ## Progress beyond Sprint 1
 
@@ -129,6 +129,13 @@ The existing [browser visualization archive](../work/uwb-site.tar.gz) was added 
 - Fixed a startup fault by initializing the driver's private state before reading radio status through the driver. Keeping the anchor receiver enabled between host polls resolved the repeated missed exchanges.
 - In the final run, the first attempt timed out during startup. Then both serial logs matched for **25 consecutive exchanges**, sequence numbers 1–25. The tag reported a median of **0.704 m** and a range of **0.633–0.800 m**. The physical separation was unmeasured and antenna delays used nominal values, so accuracy remains unverified.
 - To repeat the [ranging test](../firmware/README.md#two-way-ranging), power both boards and open **ESP-IDF: Monitor Device** on the tag at 115200 baud. The tag publishes estimates about once a second and the anchor logs matching replies.
+
+## November 15, 2026 wireless TWR feasibility test
+
+- Added **Live TWR distance** to the tag's Wi-Fi dashboard. The tag forwards four DW3110 timing intervals plus the node IDs and exchange sequence. The computer's browser calculates double-sided TWR distance in meters and clears the reading once the last sample is at least three seconds old. The tag's serial estimate can be matched by sequence during a bench run.
+- The bench test uses one tag and one anchor. Load the updated firmware on the tag, connect the computer to the tag's Wi-Fi, and compare the browser readings at measured antenna-to-antenna separations. Record the ground-truth distances, observed range errors, and whether the display clears when the anchor stops replying. See the [wireless bench procedure](../firmware/README.md#two-way-ranging).
+- The ESP-IDF 6.1 build passed. The browser logic passed simulated responses for a 0.704 m reference case, stale data, a disconnected link, and recovery. Windows detected no ESP32 serial ports, so flashing and the physical Wi-Fi ranging test remain pending.
+- The next phase is uplink TDoA. Multiple anchors will receive the same tag transmissions and forward reception timestamps with tag, anchor, and packet identifiers. The computer will apply anchor clock correction, estimate the tag's 2D position, and display it on an indoor map with a configurable danger zone and entry alerts. The Sprint 1 timing feasibility gate still applies before live map evaluation.
 
 ## Review and validation
 

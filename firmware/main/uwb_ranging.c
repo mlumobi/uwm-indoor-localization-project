@@ -56,6 +56,23 @@ static const uint32_t RX_EVENTS = SYS_STATUS_ALL_RX_GOOD | SYS_STATUS_ALL_RX_ERR
 static spi_device_handle_t radio_spi;
 static DMA_ATTR uint8_t spi_tx[SPI_BUFFER_SIZE];
 static DMA_ATTR uint8_t spi_rx[SPI_BUFFER_SIZE];
+static portMUX_TYPE sample_lock = portMUX_INITIALIZER_UNLOCKED;
+static uwb_twr_sample_t latest_sample;
+
+static void store_sample(uwb_twr_sample_t sample)
+{
+    portENTER_CRITICAL(&sample_lock);
+    latest_sample = sample;
+    portEXIT_CRITICAL(&sample_lock);
+}
+
+bool uwb_ranging_get_latest(uwb_twr_sample_t *sample)
+{
+    portENTER_CRITICAL(&sample_lock);
+    *sample = latest_sample;
+    portEXIT_CRITICAL(&sample_lock);
+    return sample->tag_id != 0;
+}
 
 static int32_t spi_read(uint16_t header_size, uint8_t *header, uint16_t size, uint8_t *data)
 {
@@ -300,6 +317,19 @@ static bool range_tag(uint16_t id, uint8_t sequence)
         reply_a > MAX_INTERVAL_TICKS || reply_b > MAX_INTERVAL_TICKS) {
         return false;
     }
+
+    store_sample((uwb_twr_sample_t){
+        .tag_id = id,
+        .anchor_id = report.source,
+        .sequence = sequence,
+        .round_a_ticks = round_a,
+        .reply_a_ticks = reply_a,
+        .round_b_ticks = round_b,
+        .reply_b_ticks = reply_b,
+        .completed_at_us = esp_timer_get_time(),
+    });
+
+    // Keep the local estimate for USB bench diagnostics.
     int64_t numerator = (int64_t)round_a * round_b - (int64_t)reply_a * reply_b;
     double tof_ticks = numerator / ((double)round_a + round_b + reply_a + reply_b);
     double meters = tof_ticks * DWT_TIME_UNITS * 299702547.0;
@@ -375,6 +405,7 @@ static void ranging_task(void *arg)
         }
         uint32_t role = ((uint32_t)id << 1) | anchor;
         if (role != previous_role) {
+            store_sample((uwb_twr_sample_t){0});
             ESP_LOGI(TAG, "Ranging as %s %u", anchor ? "anchor" : "tag", id);
             previous_role = role;
             dwt_forcetrxoff();

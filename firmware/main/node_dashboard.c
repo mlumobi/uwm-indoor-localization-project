@@ -11,10 +11,12 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "node_dashboard.h"
+#include "uwb_ranging.h"
 
 #define SETTINGS_KEY "settings_v1"
 #define SETUP_PASSWORD "88888888"
@@ -126,6 +128,31 @@ static esp_err_t serve_settings(httpd_req_t *request)
              settings.id, mac_address, setup_ssid, (uint32_t)atomic_load(&radio_id));
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    return httpd_resp_sendstr(request, json);
+}
+
+static esp_err_t serve_twr(httpd_req_t *request)
+{
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    if (settings.role == ROLE_ANCHOR) {
+        return httpd_resp_sendstr(request, "{\"role\":\"anchor\",\"sample\":null}");
+    }
+
+    uwb_twr_sample_t sample;
+    if (!uwb_ranging_get_latest(&sample) || sample.tag_id != settings.id) {
+        return httpd_resp_sendstr(request, "{\"role\":\"tag\",\"sample\":null}");
+    }
+
+    int64_t age_ms = (esp_timer_get_time() - sample.completed_at_us) / 1000;
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"role\":\"tag\",\"sample\":{\"tagId\":%u,\"anchorId\":%u,\"sequence\":%u,"
+             "\"roundATicks\":%" PRIu32 ",\"replyATicks\":%" PRIu32 ","
+             "\"roundBTicks\":%" PRIu32 ",\"replyBTicks\":%" PRIu32 ",\"ageMs\":%" PRId64 "}}",
+             sample.tag_id, sample.anchor_id, sample.sequence,
+             sample.round_a_ticks, sample.reply_a_ticks, sample.round_b_ticks, sample.reply_b_ticks,
+             age_ms);
     return httpd_resp_sendstr(request, json);
 }
 
@@ -273,6 +300,7 @@ esp_err_t node_dashboard_start(void)
         { .uri = "/", .method = HTTP_GET, .handler = serve_dashboard },
         { .uri = "/api/settings", .method = HTTP_GET, .handler = serve_settings },
         { .uri = "/api/settings", .method = HTTP_PUT, .handler = save_settings },
+        { .uri = "/api/twr", .method = HTTP_GET, .handler = serve_twr },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         esp_err_t result = httpd_register_uri_handler(server, &routes[i]);
