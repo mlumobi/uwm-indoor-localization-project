@@ -1,6 +1,6 @@
 # Sprint 3–4 Progress Report
 
-After the [Sprint 2 design and fabrication order](SPRINT2.md), work moved to board assembly, ESP-IDF firmware, and two-node ranging. The USB bench test produced distance estimates. Browser ranging over Wi-Fi, calibrated accuracy, and multi-anchor localization still need hardware validation.
+After the [Sprint 2 design and fabrication order](SPRINT2.md), work moved to board assembly, ESP-IDF firmware, and ranging. The Windows dashboard now displays live distances from two tags through a single anchor over either Wi-Fi or USB. It saves timestamped CSV sessions on the computer. The bench tests verified that measurements reached the dashboard and the CSV. Measured ranging accuracy and uplink TDoA localization remain open.
 
 ## November 14, 2026 bench log
 
@@ -42,11 +42,31 @@ The first review used KiCad CLI 9.0.2, which failed to load the KiCad 10 schemat
 
 - Added **Live TWR distance** to the tag's Wi-Fi dashboard. The tag forwards four DW3110 timing intervals plus the node IDs and exchange sequence. The computer's browser calculates double-sided TWR distance in meters and clears the reading once the last sample is at least three seconds old. The tag's serial estimate can be matched by sequence during a bench run.
 - The bench test uses one tag and one anchor. Load the updated firmware on the tag, connect the computer to the tag's Wi-Fi, and compare the browser readings at measured antenna-to-antenna separations. Record the ground-truth distances, observed range errors, and whether the display clears when the anchor stops replying. See the [wireless bench procedure](../firmware/README.md#two-way-ranging).
-- The ESP-IDF 6.1 build passed. The browser logic passed simulated responses for a 0.704 m reference case, stale data, a disconnected link, and recovery. Windows detected no ESP32 serial ports during that session. Flashing and a physical Wi-Fi ranging test remain pending in the project record.
+- The ESP-IDF 6.1 build passed. The browser logic passed simulated responses for a 0.704 m reference case, stale data, a disconnected link, and recovery. Hardware checks followed on November 17–18.
 
 ## November 17, 2026 local ranging log
 
-The firmware working tree adds a [local ranging log](../firmware/README.md#local-ranging-log) that retains up to **2,048 records** per board in a dedicated flash partition and overwrites the oldest records as it fills. Each board's dashboard can export those records as CSV. Tag records store all four TWR timing intervals and the distance estimate. Anchor records store the anchor intervals and the lower 32 bits of the poll RX, response TX, and final RX timestamps. Both store node IDs and the exchange sequence. Build, flashing, and hardware validation of this revision remain unverified in the project record.
+The [local ranging log](../firmware/README.md#local-ranging-log) retains up to **2,048 records** per board in a dedicated flash partition and overwrites the oldest as it fills. Each board's dashboard can export those records as CSV. Tag records store all four TWR timing intervals and the distance estimate. Anchor records store the anchor intervals and the lower 32 bits of the poll RX, response TX, and final RX timestamps. Both store node IDs and the exchange sequence. Firmware `0a44c59` built successfully with the custom partition table, and flash verification passed on `COM3`, `COM4`, and `COM5`. A controlled power-cut and CSV readback test for the on-board log remains open.
+
+## November 17–18, 2026 multi-tag ranging and computer dashboard
+
+### Sharing an anchor and selecting a target
+
+- Adding a second tag reproduced a run of 10 consecutive incomplete exchanges on `COM4`. The firmware now keeps listening for the expected reply after receiving an unrelated frame. Tags vary the poll interval and retry once after a randomized delay when an exchange fails. In a 45-second bench run with both tags active, `COM4` completed **43 of 43** attempts and `COM5` completed **45 of 46**. These counts describe that bench run.
+- Added **Target Anchor ID** to the tag's Wi-Fi settings. A configured tag addresses its polls to that anchor. Clearing the field selects broadcast ranging. Hardware verified ranging to anchor `1002`, persistence after a tag reboot, and an empty distance display for an unavailable target. Switching between two simultaneously active anchors remains open.
+
+### Anchor gateway and bench results
+
+| Board | Gateway test role | Node ID | Setup SSID |
+| --- | --- | ---: | --- |
+| `COM4` | Reference anchor | 1003 | `UWM-FAF2AC` |
+| `COM5` | Tag on separate power during verification | 1001 | `UWM-FABA08` |
+| `COM3` | Second tag | 1002 | `UWM-FABAEC` |
+
+- After DS-TWR completes, the tag sends its calculated distance back to the anchor in a fifth UWB frame. The anchor matches the result to the tag and exchange sequence, keeps the latest result for up to **32 tags**, and forwards readings over USB Serial/JTAG or exposes them through `GET /api/twr/tags` on its setup Wi-Fi.
+- The [computer dashboard](../computer/README.md) displays each tag's distance, source, and freshness for the selected reference anchor. It marks readings stale after **three seconds**. Windows received live readings for tags `1001` and `1002` through anchor `1003` using each transport. Tag `1001` ran on separate power and was absent from the PC's USB port list. The collector opened only the anchor connection in each test.
+- **Start logging** opens a timestamped CSV under `computer/logs/`. **End logging** closes it and displays the saved path and row count. Each row includes UTC receive time, tag ID, anchor ID, sequence, distance in meters, and connection source. A live test wrote three readings to a temporary CSV, confirmed that the file stopped changing after ending the session, and opened a different CSV for a second session.
+- Tag `1001` passed the gateway test with its installed Tag firmware. Flash the final build before reusing that board as an anchor.
 
 ## Status of the Sprint 1 user stories
 
@@ -54,11 +74,11 @@ All five tracking acceptance tests remain open.
 
 | Sprint 1 story | Evidence and remaining work |
 | --- | --- |
-| One tag on an indoor map | One tag and one anchor returned pairwise distance estimates. A position solver, measured position error, and a freshness test are still needed. |
-| Two distinct tracked tags | The shared board is intended for both node roles. No new crossing-path test, per-tag update-rate report, or physical two-tag test is committed. |
+| One tag on an indoor map | The computer dashboard displays live pairwise distances and marks stale readings. Indoor position estimation, map placement, and surveyed position-error tests are still needed. |
+| Two distinct tracked tags | Two physical tags appeared under separate IDs through one anchor. Position identity during crossing paths and per-tag position update rates still need testing. |
 | Restricted-zone alerts | No new implementation or acceptance log for permitted IDs, entry-event handling, or stale/invalid suppression is committed. |
 | Abnormal motion and prolonged signal loss | No new speed-threshold logic, loss-timeout implementation, or scenario results are committed. |
-| Recorded-movement replay | No new timestamped position recordings, replay implementation, or reproducibility results are committed. |
+| Recorded-movement replay | The computer saves timestamped TWR distance sessions as CSV. Position recordings and map replay are still needed. |
 
 The [Sprint 1 browser mockup](../work/uwb-site.tar.gz) shows three anchors, two movable tags, and a danger zone. It generates ideal arrival times from positions supplied by dragging. The timestamp-to-position solver and the planned Python simulation remain open.
 
@@ -66,6 +86,6 @@ The [Sprint 1 browser mockup](../work/uwb-site.tar.gz) shows three anchors, two 
 
 1. **Resolve the board findings.** Fix the antenna keep-out and thermal relief violations, then rerun the checks. Confirm the intended LED resistor values and DWM3000 GPIO drive limits, and bring the schematic, PCB, and wiring reference into agreement. The wiring review proposed evaluating 2.2–4.7 kΩ for the radio LEDs against the actual components.
 2. **Finish electrical bring-up.** Check the external SW1 pull-up, IRQ, LEDs, sleep/wake behavior, and USB supply and continuity. Inspect grounding, decoupling, antenna clearance, connector orientation, and footprint fit. Measure mobile-tag power consumption and battery runtime.
-3. **Measure TWR accuracy and validate data capture.** Compare USB and Wi-Fi ranging at several measured antenna-to-antenna separations, calibrate antenna delays, and check whether the browser clears stale readings. Verify flash logging, CSV export, and persistence across power cycles.
-4. **Test uplink TDoA with one tag and two anchors.** Log matched tag and anchor IDs, sequence numbers, raw receive timestamps, and diagnostics. Compare corrected timing against surveyed positions. The [Sprint 1 feasibility gate](SPRINT1.md#project-assumption) requires at least **95% matched reception** and a **95th-percentile absolute timing residual of at most 1 ns** at each test position. Time-box the experiment to two focused sessions and document the TWR fallback decision if the gate cannot be met.
-5. **Complete the simulation and tracking acceptance tests.** Implement the timestamp-to-position solver, then test map position, identity, freshness, zone alerts, abnormal motion, loss, and replay. After the timing gate passes, expand to three anchors and one physical tag before adding the second tag and measuring position error against surveyed ground truth.
+3. **Measure TWR accuracy and validate on-board storage.** Compare readings at measured antenna-to-antenna separations, calibrate antenna delays, and repeat with an obstructed path. Verify the on-board CSV across a controlled power cut. Check anchor selection with two active anchors and measure the update rate and missed results with both tags active.
+4. **Test uplink TDoA with one tag and two anchors.** Use the main anchor as the UWB clock reference and gateway. Forward the anchors' raw blink and sync timestamps to the PC for clock correction. Compare corrected timing against surveyed positions. The [Sprint 1 feasibility gate](SPRINT1.md#project-assumption) requires at least **95% matched reception** and a **95th-percentile absolute timing residual of at most 1 ns** at each test position. Time-box the experiment to two focused sessions and document the TWR fallback decision if the gate cannot be met.
+5. **Build the position solver and floor-plan dashboard.** Implement and test the solver with simulated or recorded timestamps. After the timing gate passes, add a third anchor for known-height 2D positioning. Measure position error against surveyed ground truth before testing the second tag, freshness, zone alerts, abnormal motion, signal loss, and replay.

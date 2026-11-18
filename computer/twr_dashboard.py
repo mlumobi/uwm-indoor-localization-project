@@ -17,6 +17,7 @@ from serial.tools import list_ports
 
 
 ROLE = re.compile(r"Ranging as (tag|anchor) (\d+)(?: targeting anchor (\d+))?$")
+IDENTITY = re.compile(r"Node identity: (tag|anchor) (\d+)$")
 RESULT = re.compile(r"TWR anchor (\d+) measured tag (\d+) seq (\d+): (-?\d+) mm boot (\d+) record (\d+)$")
 REPLY = re.compile(r"TWR anchor (\d+) replied to tag (\d+) seq \d+$")
 STALE_SECONDS = 3
@@ -115,6 +116,10 @@ class Board:
             self.heard_tags.clear()
 
     def consume(self, line):
+        _, marker, payload = line.strip().partition("uwm: ")
+        if marker and (match := IDENTITY.fullmatch(payload)):
+            self.identify(match[1], int(match[2]))
+            return
         _, marker, payload = line.strip().partition("uwb: ")
         if not marker:
             return
@@ -169,6 +174,7 @@ class Collector:
                     connection.dtr = connection.rts = False
                     connection.open()
                     with self.lock:
+                        board.identify("", None)
                         board.status = "Connected"
                     pending = b""
                     while not self.stop.is_set():
@@ -224,7 +230,7 @@ class Collector:
             boards = []
             anchors = set()
             for port, board in sorted(self.boards.items()):
-                if board.role == "anchor":
+                if board.role == "anchor" and board.status == "Connected":
                     anchors.add(board.node_id)
                 boards.append({
                     "port": port, "status": board.status, "role": board.role, "nodeId": board.node_id,
@@ -290,7 +296,7 @@ def run(ports, http_port, log_dir, anchor_url):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     transport = parser.add_mutually_exclusive_group()
-    transport.add_argument("--ports", nargs="+", help="Anchor serial ports. Defaults to ESP32 USB autodetection.")
+    transport.add_argument("--ports", nargs="+", help="Only scan these serial ports. Omit for USB hot-plug discovery.")
     transport.add_argument("--anchor-url", help="Wi-Fi URL of the anchor, for example http://192.168.4.1.")
     parser.add_argument("--http-port", type=int, default=8765, help="Local dashboard port. Defaults to 8765.")
     parser.add_argument("--log-dir", type=Path, default=DEFAULT_LOG_DIR, help="Folder for local TWR session CSVs.")

@@ -19,6 +19,7 @@ enum {
     BUTTON_POLL_MS = 10,
     BUTTON_DEBOUNCE_US = 30000,
     BUTTON_LONG_PRESS_US = 1000000,
+    USB_IDENTITY_INTERVAL_US = 2000000,
 };
 
 typedef struct {
@@ -83,10 +84,22 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(uwb_ranging_start());
 
     button_test_t button = {0};
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    int64_t next_identity_us = 0;
+#endif
     while (true) {
         const int64_t now_us = esp_timer_get_time();
         sample_button(&button, gpio_get_level(SW1_GPIO) == 0, now_us);
 
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+        if (now_us >= next_identity_us) {
+            next_identity_us = now_us + USB_IDENTITY_INTERVAL_US;
+            node_ranging_config_t config = node_dashboard_get_ranging_config();
+            if (config.id != 0 && usb_serial_jtag_is_connected()) {
+                ESP_LOGI(TAG, "Node identity: %s %u", config.anchor ? "anchor" : "tag", config.id);
+            }
+        }
+#endif
         vTaskDelay(pdMS_TO_TICKS(BUTTON_POLL_MS));
     }
 }

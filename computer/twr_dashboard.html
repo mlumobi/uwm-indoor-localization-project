@@ -139,8 +139,13 @@
       }
       results.hidden = !activeAnchor || rows.length === 0;
       empty.hidden = !results.hidden;
-      empty.textContent = state.boards.length === 0 ? "Connect the reference anchor over USB or start with its Wi-Fi URL." :
-        "Waiting for the anchor to report tag distances.";
+      if (activeAnchor) {
+        empty.textContent = `Waiting for Anchor ${activeAnchor} to report tag distances.`;
+      } else if (state.boards.some(board => board.status === "Connected")) {
+        empty.textContent = "Waiting for a connected board to report Anchor mode.";
+      } else {
+        empty.textContent = "Connect the reference anchor over USB or start with its Wi-Fi URL.";
+      }
       const message = online ? `${liveCount} of ${rows.length} tags reporting live · Uncalibrated distances` :
         "Local collector is unreachable.";
       if (summary.textContent !== message) summary.textContent = message;

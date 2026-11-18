@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UWB TDoA tracking</title>
+  <style>
+    :root { font-family: Geist, system-ui, sans-serif; color: #e9edf3; background: #101720; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 86rem; margin: auto; padding: clamp(1rem, 4vw, 2.8rem); }
+    header, .actions { display: flex; align-items: center; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
+    h1 { margin: 0 0 .4rem; font-size: clamp(1.8rem, 4vw, 2.65rem); letter-spacing: -.045em; }
+    h2 { margin: 0; font-size: 1.05rem; }
+    p { margin: .35rem 0; }
+    .muted { color: #adbacb; }
+    .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(17rem, 1fr); gap: 1rem; margin-top: 1.3rem; }
+    .panel { background: #192431; border: 1px solid #384656; border-radius: .75rem; overflow: hidden; }
+    .pad, summary { padding: .9rem 1rem; }
+    .sidebar { display: grid; gap: 1rem; align-content: start; }
+    button, .file-label { font: inherit; border: 1px solid #62758b; border-radius: .4rem; background: #121a24; color: inherit; padding: .45rem .65rem; }
+    button:enabled, .file-label, summary { cursor: pointer; }
+    :focus-visible, .file-label:focus-within { outline: 2px solid #74ddbf; outline-offset: 3px; }
+    button:disabled { opacity: .52; }
+    #start:enabled { background: #74ddbf; color: #12201c; border-color: #74ddbf; }
+    #end:enabled, .warning { color: #ffd386; }
+    #image { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+    #mode { font-weight: 700; color: #74ddbf; }
+    #mode.simulated { color: #ffd386; }
+    canvas { display: block; width: 100%; aspect-ratio: 4 / 3; background: #131e29; }
+    .map-controls { border-bottom: 1px solid #384656; }
+    table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; border-top: 1px solid #384656; padding: .6rem .75rem; }
+    th { color: #adbacb; font-size: .8rem; }
+    .tag-name { font-weight: 700; white-space: nowrap; }
+    .tag-status { font-size: .85rem; }
+    .recording { font-size: .88rem; overflow-wrap: anywhere; }
+    .stats { font-variant-numeric: tabular-nums; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><h1>UWB TDoA tracking</h1><p><span id="mode">Loading</span> <span id="link" class="muted" role="status"></span></p></div>
+      <div class="actions">
+        <button id="start" type="button" disabled>Start logging</button>
+        <button id="end" type="button" disabled>End logging</button>
+      </div>
+    </header>
+    <p id="recording" class="muted recording" role="status"></p>
+    <div class="grid">
+      <section class="panel" aria-labelledby="map-title">
+        <div class="pad actions map-controls">
+          <h2 id="map-title">Floor map</h2>
+          <div class="actions">
+            <label class="file-label" for="image">Load floor plan<input id="image" type="file" accept="image/png,image/jpeg,image/webp"></label>
+            <button id="clear-image" type="button" hidden>Clear</button>
+          </div>
+        </div>
+        <canvas id="map" aria-label="Top-down map of fixed anchors and estimated tag positions"></canvas>
+        <p class="pad muted">Coordinates in meters. A floor plan fills the configured bounds.</p>
+      </section>
+      <aside class="sidebar">
+        <section class="panel" aria-labelledby="tags-title">
+          <h2 class="pad" id="tags-title">Tags</h2>
+          <table><thead><tr><th scope="col">Tag</th><th scope="col">Position (m)</th><th scope="col">Status</th></tr></thead><tbody id="tags"></tbody></table>
+        </section>
+        <section class="panel" aria-labelledby="anchors-title">
+          <h2 class="pad" id="anchors-title">Anchors</h2>
+          <table><thead><tr><th scope="col">ID</th><th scope="col">Sync</th><th scope="col">Last blink</th></tr></thead><tbody id="anchors"></tbody></table>
+          <p class="pad muted stats" id="stats"></p>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const el = id => document.getElementById(id);
+    const canvas = el("map"), ctx = canvas.getContext("2d");
+    const colors = ["#6de4ba", "#ffae80", "#b8a2ff", "#ffd477", "#80d3ff"];
+    const color = id => colors[(id * 7) % colors.length];
+    const fixLive = tag => online && tag.live;
+    let state = null, online = false, background = null, imageRevision = 0;
+    let busy = false, revision = 0, recordError = "";
+
+    function draw() {
+      const { width, height } = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!state || width < 80 || height < 80) return;
+      const [x0, y0, x1, y1] = state.layout.bounds_m;
+      const scale = Math.min((width - 64) / (x1 - x0), (height - 64) / (y1 - y0));
+      const left = (width - (x1 - x0) * scale) / 2;
+      const top = (height - (y1 - y0) * scale) / 2;
+      const project = ([x, y]) => [left + (x - x0) * scale, top + (y1 - y) * scale];
+      const rectangle = [left, top, (x1 - x0) * scale, (y1 - y0) * scale];
+      ctx.fillStyle = "#213140";
+      ctx.fillRect(...rectangle);
+      if (background) {
+        ctx.globalAlpha = 0.6;
+        ctx.drawImage(background, ...rectangle);
+        ctx.globalAlpha = 1;
+      }
+      const step = Math.max(1, Math.ceil(Math.max(x1 - x0, y1 - y0) / 15));
+      ctx.font = "11px system-ui";
+      ctx.strokeStyle = background ? "#d2dfeb48" : "#3d5265";
+      ctx.fillStyle = "#b1c3d6";
+      for (let x = Math.ceil(x0 / step); x <= Math.floor(x1 / step); x++) {
+        const [pixel, bottom] = project([x * step, y0]);
+        ctx.beginPath(); ctx.moveTo(pixel, top); ctx.lineTo(pixel, bottom); ctx.stroke();
+        ctx.fillText(`${x * step}`, pixel - 4, bottom + 18);
+      }
+      for (let y = Math.ceil(y0 / step); y <= Math.floor(y1 / step); y++) {
+        const [, pixel] = project([x0, y * step]);
+        ctx.beginPath(); ctx.moveTo(left, pixel); ctx.lineTo(left + rectangle[2], pixel); ctx.stroke();
+        ctx.fillText(`${y * step}`, left - 19, pixel + 3);
+      }
+      ctx.strokeStyle = "#778ca1";
+      ctx.strokeRect(...rectangle);
+
+      for (const tag of state.tags) {
+        if (!tag.fix) continue;
+        ctx.strokeStyle = color(tag.id);
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = fixLive(tag) ? 0.55 : 0.25;
+        ctx.beginPath();
+        tag.trail.map(project).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.stroke();
+        const [x, y] = project([tag.fix.x, tag.fix.y]);
+        ctx.globalAlpha = fixLive(tag) ? 1 : 0.55;
+        ctx.fillStyle = color(tag.id);
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText(`Tag ${tag.id}`, x + 9, y - 7);
+      }
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+      for (const anchor of state.anchors) {
+        const [x, y] = project(anchor.point);
+        ctx.fillStyle = anchor.main ? "#ffdb8e" : "#dce8f5";
+        ctx.fillRect(x - 4, y - 4, 8, 8);
+        ctx.fillText(`${anchor.id}${anchor.main ? " · Main" : ""}`, x + (x > width * .6 ? -56 : 8), y - 9);
+      }
+    }
+
+    function row(table, cells) {
+      const tr = table.insertRow();
+      for (const [text, className] of cells) {
+        const cell = tr.insertCell();
+        cell.textContent = text;
+        if (className) cell.className = className;
+      }
+    }
+
+    function renderRecording() {
+      const rec = state?.recording;
+      el("start").disabled = !online || busy || !rec || rec.active;
+      el("end").disabled = !online || busy || !rec || !rec.active;
+      const error = recordError || rec?.error;
+      el("recording").classList.toggle("warning", Boolean(error));
+      const message = error ? `Logging error · ${error}` : rec?.path ?
+        `${rec.active ? "Recording" : "Saved"} · ${rec.events} events · ${rec.fixes} positions · ${rec.path}` : "";
+      if (el("recording").textContent !== message) el("recording").textContent = message;
+    }
+
+    function render() {
+      renderRecording();
+      el("link").textContent = online ? `· ${state.status}` : "· Local collector is unreachable";
+      if (!state) return;
+      el("mode").textContent = state.source;
+      el("mode").classList.toggle("simulated", ["Simulation", "Replay"].includes(state.source));
+      const tags = el("tags"), anchors = el("anchors");
+      tags.replaceChildren();
+      anchors.replaceChildren();
+      if (!state.tags.length) row(tags, [["Waiting for tag blinks", "muted"], ["—"], ["—"]]);
+      for (const tag of state.tags) {
+        const position = tag.fix ? `${tag.fix.x.toFixed(2)}, ${tag.fix.y.toFixed(2)}` : "—";
+        const message = tag.fix && !fixLive(tag) ? `Stale · ${tag.age.toFixed(1)} s` :
+          tag.fix ? `Live · ${tag.fix.anchors.length} anchors` : tag.status;
+        row(tags, [[String(tag.id), "tag-name"], [position], [message, "tag-status"]]);
+        tags.lastElementChild.firstElementChild.style.color = color(tag.id);
+      }
+      for (const anchor of state.anchors) {
+        const sync = anchor.sync_age === null ? "Waiting" : !online || anchor.sync_age > 1 ? "Stale" :
+          anchor.main ? "Reference" : "Receiving";
+        const seen = anchor.blink_age === null ? "—" : `${anchor.blink_age.toFixed(1)} s ago`;
+        row(anchors, [[`${anchor.id}${anchor.main ? " · Main" : ""}`], [sync], [seen]]);
+      }
+      el("stats").textContent = `${state.counts.blink} blinks · ${state.counts.fix} fixes · ${state.counts.rejected} rejected${state.invalid ? ` · ${state.invalid} invalid events` : ""}`;
+      draw();
+    }
+
+    async function record(action) {
+      busy = true;
+      revision++;
+      recordError = "";
+      renderRecording();
+      try {
+        const response = await fetch(`/api/tdoa/record/${action}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(3000)
+        });
+        if (!response.ok) throw new Error();
+        state.recording = await response.json();
+      } catch { recordError = "Check the local collector and try again."; }
+      finally { busy = false; revision++; renderRecording(); }
+    }
+
+    async function refresh() {
+      const check = revision;
+      try {
+        const response = await fetch("/api/tdoa", { signal: AbortSignal.timeout(2000) });
+        if (!response.ok) throw new Error();
+        const next = await response.json();
+        if (state && (busy || revision !== check)) next.recording = state.recording;
+        state = next;
+        online = true;
+      } catch { online = false; }
+      render();
+      setTimeout(refresh, 300);
+    }
+
+    el("image").addEventListener("change", () => {
+      const file = el("image").files[0];
+      if (!file) return;
+      const version = ++imageRevision;
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        if (version !== imageRevision) return;
+        background = image;
+        el("clear-image").hidden = false;
+        draw();
+      };
+      image.onerror = () => { URL.revokeObjectURL(url); el("image").value = ""; };
+      image.src = url;
+    });
+    el("clear-image").addEventListener("click", () => {
+      imageRevision++;
+      background = null;
+      el("image").value = "";
+      el("clear-image").hidden = true;
+      draw();
+    });
+    el("start").addEventListener("click", () => record("start"));
+    el("end").addEventListener("click", () => record("stop"));
+    new ResizeObserver(draw).observe(canvas);
+    refresh();
+  </script>
+</body>
+</html>

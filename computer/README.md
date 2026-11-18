@@ -1,5 +1,7 @@
 # Computer TWR dashboard
 
+For uplink positioning, see the [computer TDoA dashboard and gateway interface](TDOA.md).
+
 Run this dashboard to read live TWR distances from a reference anchor. Update the firmware on the anchor and tags. Power the tags separately. They send distance results to the anchor over UWB, and the anchor delivers the results to the computer over USB or Wi-Fi.
 
 Give each board a unique Node ID. When several anchors are active, set each monitored tag's **Target Anchor ID** to the reference anchor using its onboard Wi-Fi settings page. Select the same anchor in the computer dashboard.
@@ -25,6 +27,8 @@ python computer/twr_dashboard.py --anchor-url http://192.168.4.1
 ```
 
 Open [the dashboard](http://127.0.0.1:8765/) in a browser on the same computer. For USB, use `--ports COM4` on Windows or pass the anchor's `/dev/cu.*` device on macOS to select a specific port. Close any ESP-IDF monitor holding that port. Use `--http-port 8766` if port 8765 is in use. Press **Ctrl+C** to stop the collector.
+
+In USB auto-detection mode, anchors can be plugged in while the dashboard runs. An updated anchor reports its Node ID while idle and appears in **Reference anchor** within a few seconds. The `--ports` option limits discovery to the listed ports, and Wi-Fi mode uses the configured URL.
 
 The dashboard marks a distance stale after three seconds without a new measurement. Distances are the firmware's uncalibrated estimates.
 
