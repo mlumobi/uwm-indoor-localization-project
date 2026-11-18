@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "node_dashboard.h"
+#include "ranging_log.h"
 #include "uwb_ranging.h"
 
 enum {
@@ -333,6 +334,16 @@ static bool range_tag(uint16_t id, uint8_t sequence)
     int64_t numerator = (int64_t)round_a * round_b - (int64_t)reply_a * reply_b;
     double tof_ticks = numerator / ((double)round_a + round_b + reply_a + reply_b);
     double meters = tof_ticks * DWT_TIME_UNITS * 299702547.0;
+    ranging_log_submit(&(ranging_log_measurement_t){
+        .tag_id = id,
+        .anchor_id = report.source,
+        .sequence = sequence,
+        .round_a_ticks = round_a,
+        .reply_a_ticks = reply_a,
+        .round_b_ticks = round_b,
+        .reply_b_ticks = reply_b,
+        .distance_m = meters,
+    });
     ESP_LOGI(TAG, "TWR tag %u -> anchor %u seq %u: %.3f m",
              id, report.source, sequence, meters);
     return true;
@@ -379,6 +390,17 @@ static void range_anchor(uint16_t id, bool *listening)
     report.round_trip = final_rx - response_tx;
     report.reply = response_tx - poll_rx;
     if (send_frame(&report, false)) {
+        ranging_log_submit(&(ranging_log_measurement_t){
+            .is_anchor = true,
+            .tag_id = poll.source,
+            .anchor_id = id,
+            .sequence = poll.sequence,
+            .round_b_ticks = report.round_trip,
+            .reply_b_ticks = report.reply,
+            .poll_rx_timestamp_low32 = poll_rx,
+            .response_tx_timestamp_low32 = response_tx,
+            .final_rx_timestamp_low32 = final_rx,
+        });
         ESP_LOGI(TAG, "TWR anchor %u replied to tag %u seq %u", id, poll.source, poll.sequence);
     }
 }

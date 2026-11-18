@@ -34,6 +34,14 @@ The bench firmware uses double-sided two-way ranging on UWB channel 5. The tag s
 
 The initial poll is broadcast, so this test uses one tag and one anchor. The computer only joins the tag's Wi-Fi. A USB serial connection is optional during ranging. At 115200 baud, the tag logs a local distance estimate and the anchor logs its replies for comparison by exchange sequence.
 
+## Local ranging log
+
+Each board automatically saves its latest 2,048 ranging records to a dedicated flash partition. Recording works without a USB connection or Wi-Fi client. At roughly one record per second, the log holds about 34 minutes and overwrites the oldest records as it fills. Committed records survive power cycles.
+
+Connect to the board's setup Wi-Fi and choose **Download CSV** under **Local ranging log**, or open `http://192.168.4.1/api/twr/log.csv`. Rows are ordered by record number. Use `boot_id` to group records from the same boot and `uptime_ms` to read time since that boot. Tag rows contain all four TWR intervals and the uncalibrated distance estimate. Anchor rows contain the intervals reported by that anchor and the lower 32 bits of its poll receive, response transmit, and final receive timestamps. Both roles record the node IDs and exchange sequence.
+
+For an existing build with a generated `sdkconfig`, use `idf.py menuconfig` and select **Partition Table → Custom partition table CSV** with filename `partitions.csv`. Then run the full `idf.py -p PORT flash` so the board gets the new partition table. The settings, PHY, and app partitions retain their original offsets and sizes.
+
 ## SW1 button test
 
 Open **ESP-IDF: Monitor Device** with the board connected on its USB serial port. Use **SW1 on the custom PCB**, which is wired to GPIO3.

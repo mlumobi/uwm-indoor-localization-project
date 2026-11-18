@@ -66,7 +66,8 @@
     .help, dt { color: var(--muted); font-size: .875rem; }
     .help { margin-top: .3rem; }
     .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem .85rem; margin-top: 1.15rem; }
-    button { border: 0; border-radius: .5rem; background: var(--accent); color: #fff; padding: .65rem 1rem; font: inherit; font-weight: 650; }
+    button, .download { border: 0; border-radius: .5rem; background: var(--accent); color: #fff; padding: .65rem 1rem; font: inherit; font-weight: 650; }
+    .download { display: inline-block; text-decoration: none; }
     button:enabled { cursor: pointer; }
     button:disabled { opacity: .55; }
     #status { font-size: .875rem; }
@@ -138,6 +139,13 @@
         <div><dt>SPI status</dt><dd id="spi">Checking…</dd></div>
       </dl>
       <button type="button" id="refresh">Refresh board status</button>
+    </section>
+    <section class="ranging" aria-labelledby="log-heading">
+      <h2 id="log-heading">Local ranging log</h2>
+      <p class="help">This board keeps its latest 2,048 ranging records across restarts.</p>
+      <div class="actions">
+        <a class="download" href="/api/twr/log.csv" download="twr-log.csv">Download CSV</a>
+      </div>
     </section>
   </main>
   <script>

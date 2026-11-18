@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "node_dashboard.h"
+#include "ranging_log.h"
 #include "uwb_ranging.h"
 
 static const gpio_num_t SW1_GPIO = GPIO_NUM_3;
@@ -77,6 +78,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "SW1 GPIO3 at startup with pull-up: %s", gpio_get_level(SW1_GPIO) ? "HIGH" : "LOW");
 
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ranging_log_start());
     ESP_ERROR_CHECK_WITHOUT_ABORT(node_dashboard_start());
     ESP_ERROR_CHECK_WITHOUT_ABORT(uwb_ranging_start());
 

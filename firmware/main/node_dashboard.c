@@ -16,6 +16,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "node_dashboard.h"
+#include "ranging_log.h"
 #include "uwb_ranging.h"
 
 #define SETTINGS_KEY "settings_v1"
@@ -294,6 +295,7 @@ esp_err_t node_dashboard_start(void)
 
     httpd_config_t http = HTTPD_DEFAULT_CONFIG();
     http.lru_purge_enable = true;
+    http.stack_size = 6144; // CSV export formats and buffers rows on the server task.
     httpd_handle_t server;
     ESP_RETURN_ON_ERROR(httpd_start(&server, &http), TAG, "start HTTP server");
     const httpd_uri_t routes[] = {
@@ -301,6 +303,7 @@ esp_err_t node_dashboard_start(void)
         { .uri = "/api/settings", .method = HTTP_GET, .handler = serve_settings },
         { .uri = "/api/settings", .method = HTTP_PUT, .handler = save_settings },
         { .uri = "/api/twr", .method = HTTP_GET, .handler = serve_twr },
+        { .uri = "/api/twr/log.csv", .method = HTTP_GET, .handler = ranging_log_download },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         esp_err_t result = httpd_register_uri_handler(server, &routes[i]);
