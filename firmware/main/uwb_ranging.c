@@ -9,6 +9,7 @@
 #include "esp_attr.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -26,13 +27,16 @@ enum {
     SPI_BUFFER_SIZE = 1028,
     ANTENNA_DELAY = 16385, // Nominal bench value. Calibrate each assembled board.
     RX_TIMEOUT_UUS = 30000,
+    REPLY_WAIT_US = 31000, // 30,000 UWB microseconds is about 30.8 ms.
+    STATUS_WAIT_US = 55000,
     MAX_INTERVAL_TICKS = 2200000000U, // ~34 ms, within one low-32-bit timestamp period.
     BROADCAST_ADDRESS = 0xFFFF,
     FRAME_CONTROL = 0x8841, // Data, compressed PAN ID, 16-bit source and destination.
     PAN_ID = 0x5755,
     FCS_SIZE = 2,
     HEADER_SIZE = 12,
-    FRAME_SIZE = HEADER_SIZE + 8,
+    REPORT_SIZE = HEADER_SIZE + 8,
+    RESULT_SIZE = HEADER_SIZE + 4,
 };
 
 typedef enum {
@@ -40,6 +44,7 @@ typedef enum {
     RESPONSE,
     FINAL,
     REPORT,
+    RESULT,
 } message_t;
 
 typedef struct {
@@ -49,9 +54,11 @@ typedef struct {
     message_t type;
     uint32_t round_trip;
     uint32_t reply;
+    int32_t distance_mm;
 } frame_t;
 
 static const char *const TAG = "uwb";
+static const int32_t MAX_DISTANCE_MM = 1000000;
 static const uint32_t RX_EVENTS = SYS_STATUS_ALL_RX_GOOD | SYS_STATUS_ALL_RX_ERR |
                                   SYS_STATUS_ALL_RX_TO;
 static spi_device_handle_t radio_spi;
@@ -59,6 +66,9 @@ static DMA_ATTR uint8_t spi_tx[SPI_BUFFER_SIZE];
 static DMA_ATTR uint8_t spi_rx[SPI_BUFFER_SIZE];
 static portMUX_TYPE sample_lock = portMUX_INITIALIZER_UNLOCKED;
 static uwb_twr_sample_t latest_sample;
+static uwb_anchor_sample_t anchor_samples[UWB_MAX_ANCHOR_TAGS];
+static uint32_t anchor_boot_id;
+static uint32_t anchor_record_id;
 
 static void store_sample(uwb_twr_sample_t sample)
 {
@@ -73,6 +83,44 @@ bool uwb_ranging_get_latest(uwb_twr_sample_t *sample)
     *sample = latest_sample;
     portEXIT_CRITICAL(&sample_lock);
     return sample->tag_id != 0;
+}
+
+size_t uwb_ranging_get_anchor_samples(uint16_t anchor_id, uwb_anchor_sample_t samples[UWB_MAX_ANCHOR_TAGS])
+{
+    size_t count = 0;
+    portENTER_CRITICAL(&sample_lock);
+    for (size_t i = 0; i < UWB_MAX_ANCHOR_TAGS; ++i) {
+        if (anchor_samples[i].anchor_id == anchor_id && anchor_samples[i].tag_id != 0) {
+            samples[count++] = anchor_samples[i];
+        }
+    }
+    portEXIT_CRITICAL(&sample_lock);
+    return count;
+}
+
+static void store_anchor_result(const frame_t *result)
+{
+    uwb_anchor_sample_t sample = {
+        .tag_id = result->source, .anchor_id = result->destination, .sequence = result->sequence,
+        .distance_mm = result->distance_mm, .boot_id = anchor_boot_id,
+        .record_id = ++anchor_record_id, .completed_at_us = esp_timer_get_time(),
+    };
+    portENTER_CRITICAL(&sample_lock);
+    size_t slot = 0;
+    for (size_t i = 0; i < UWB_MAX_ANCHOR_TAGS; ++i) {
+        if (anchor_samples[i].tag_id == sample.tag_id) {
+            slot = i;
+            break;
+        }
+        if (anchor_samples[i].completed_at_us < anchor_samples[slot].completed_at_us) {
+            slot = i;
+        }
+    }
+    anchor_samples[slot] = sample;
+    portEXIT_CRITICAL(&sample_lock);
+
+    ESP_LOGI(TAG, "TWR anchor %u measured tag %u seq %u: %" PRId32 " mm boot %" PRIu32 " record %" PRIu32,
+             sample.anchor_id, sample.tag_id, sample.sequence, sample.distance_mm, sample.boot_id, sample.record_id);
 }
 
 static int32_t spi_read(uint16_t header_size, uint8_t *header, uint16_t size, uint8_t *data)
@@ -191,9 +239,8 @@ static uint32_t get_le(const uint8_t *data, size_t size)
     return value;
 }
 
-static uint32_t wait_status(uint32_t mask)
+static uint32_t wait_status(uint32_t mask, int64_t deadline)
 {
-    const int64_t deadline = esp_timer_get_time() + 55000;
     do {
         uint32_t status = dwt_readsysstatuslo();
         if (status & mask) {
@@ -206,7 +253,7 @@ static uint32_t wait_status(uint32_t mask)
 
 static bool send_frame(const frame_t *frame, bool expect_reply)
 {
-    uint8_t bytes[FRAME_SIZE] = {0};
+    uint8_t bytes[REPORT_SIZE] = {0};
     put_le(bytes, FRAME_CONTROL, 2);
     bytes[2] = frame->sequence;
     put_le(bytes + 3, PAN_ID, 2);
@@ -219,7 +266,10 @@ static bool send_frame(const frame_t *frame, bool expect_reply)
     if (frame->type == REPORT) {
         put_le(bytes + 12, frame->round_trip, 4);
         put_le(bytes + 16, frame->reply, 4);
-        length = FRAME_SIZE;
+        length = REPORT_SIZE;
+    } else if (frame->type == RESULT) {
+        put_le(bytes + 12, (uint32_t)frame->distance_mm, 4);
+        length = RESULT_SIZE;
     }
 
     dwt_writesysstatuslo(RX_EVENTS | DWT_INT_TXFRS_BIT_MASK);
@@ -229,15 +279,15 @@ static bool send_frame(const frame_t *frame, bool expect_reply)
     }
     dwt_writetxfctrl(length + FCS_SIZE, 0, 1);
     uint8_t mode = DWT_START_TX_IMMEDIATE | (expect_reply ? DWT_RESPONSE_EXPECTED : 0);
-    return dwt_starttx(mode) == DWT_SUCCESS && wait_status(DWT_INT_TXFRS_BIT_MASK);
+    return dwt_starttx(mode) == DWT_SUCCESS &&
+           wait_status(DWT_INT_TXFRS_BIT_MASK, esp_timer_get_time() + STATUS_WAIT_US);
 }
 
-static bool read_frame(frame_t *frame, uint32_t *timestamp, uint32_t *rx_status)
+static bool read_frame(frame_t *frame, uint32_t *timestamp, uint32_t *rx_status, int64_t deadline)
 {
-    uint32_t status = wait_status(DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
-    if (rx_status != NULL) {
-        *rx_status = status;
-    }
+    uint32_t status = wait_status(DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO,
+                                  deadline);
+    *rx_status = status;
     if (!(status & DWT_INT_RXFCG_BIT_MASK)) {
         if (status != 0 && !(status & DWT_INT_RXFTO_BIT_MASK)) {
             ESP_LOGD(TAG, "RX status 0x%08" PRIX32, status);
@@ -246,14 +296,15 @@ static bool read_frame(frame_t *frame, uint32_t *timestamp, uint32_t *rx_status)
     }
     uint8_t ranging;
     uint16_t length = dwt_getframelength(&ranging);
-    if (length != HEADER_SIZE + FCS_SIZE && length != FRAME_SIZE + FCS_SIZE) {
+    if (length < HEADER_SIZE + FCS_SIZE || length > REPORT_SIZE + FCS_SIZE) {
         return false;
     }
-    uint8_t bytes[FRAME_SIZE];
+    uint8_t bytes[REPORT_SIZE];
     dwt_readrxdata(bytes, length - FCS_SIZE, 0);
+    const size_t frame_size = bytes[11] == REPORT ? REPORT_SIZE : bytes[11] == RESULT ? RESULT_SIZE : HEADER_SIZE;
     if (get_le(bytes, 2) != FRAME_CONTROL || get_le(bytes + 3, 2) != PAN_ID ||
-        bytes[9] != 'U' || bytes[10] != 1 || bytes[11] < POLL || bytes[11] > REPORT ||
-        (length == FRAME_SIZE + FCS_SIZE) != (bytes[11] == REPORT)) {
+        bytes[9] != 'U' || bytes[10] != 1 || bytes[11] < POLL || bytes[11] > RESULT ||
+        length != frame_size + FCS_SIZE) {
         return false;
     }
     *frame = (frame_t){
@@ -266,8 +317,12 @@ static bool read_frame(frame_t *frame, uint32_t *timestamp, uint32_t *rx_status)
     if (frame->type == REPORT) {
         frame->round_trip = get_le(bytes + 12, 4);
         frame->reply = get_le(bytes + 16, 4);
+    } else if (frame->type == RESULT) {
+        frame->distance_mm = (int32_t)get_le(bytes + 12, 4);
     }
-    *timestamp = dwt_readrxtimestamplo32(DWT_COMPAT_NONE);
+    if (timestamp != NULL) {
+        *timestamp = dwt_readrxtimestamplo32(DWT_COMPAT_NONE);
+    }
     return true;
 }
 
@@ -278,10 +333,32 @@ static bool matches(const frame_t *incoming, const frame_t *outgoing, message_t 
            (outgoing->destination == BROADCAST_ADDRESS || incoming->source == outgoing->destination);
 }
 
-static bool range_tag(uint16_t id, uint8_t sequence)
+static bool read_reply(const frame_t *sent, message_t type, frame_t *reply, uint32_t *timestamp)
+{
+    const int64_t deadline = esp_timer_get_time() + REPLY_WAIT_US;
+    while (true) {
+        uint32_t status;
+        if (read_frame(reply, timestamp, &status, deadline) && matches(reply, sent, type)) {
+            return true;
+        }
+        if (status == 0 || (status & DWT_INT_RXFTO_BIT_MASK) || esp_timer_get_time() >= deadline) {
+            return false;
+        }
+
+        // Another tag's frame or an RX error can stop reception before our reply arrives.
+        dwt_forcetrxoff();
+        dwt_writesysstatuslo(RX_EVENTS);
+        if (dwt_rxenable(DWT_START_RX_IMMEDIATE) != DWT_SUCCESS) {
+            return false;
+        }
+    }
+}
+
+static bool range_tag(uint16_t id, uint16_t target_anchor_id, uint8_t sequence)
 {
     frame_t poll = {
-        .source = id, .destination = BROADCAST_ADDRESS, .sequence = sequence, .type = POLL,
+        .source = id, .destination = target_anchor_id == 0 ? BROADCAST_ADDRESS : target_anchor_id,
+        .sequence = sequence, .type = POLL,
     };
     if (!send_frame(&poll, true)) {
         ESP_LOGW(TAG, "Poll TX did not finish");
@@ -290,7 +367,7 @@ static bool range_tag(uint16_t id, uint8_t sequence)
     uint32_t poll_tx = dwt_readtxtimestamplo32();
     frame_t response;
     uint32_t response_rx;
-    if (!read_frame(&response, &response_rx, NULL) || !matches(&response, &poll, RESPONSE)) {
+    if (!read_reply(&poll, RESPONSE, &response, &response_rx)) {
         return false;
     }
 
@@ -305,7 +382,7 @@ static bool range_tag(uint16_t id, uint8_t sequence)
     uint32_t final_tx = dwt_readtxtimestamplo32();
     frame_t report;
     uint32_t report_rx;
-    if (!read_frame(&report, &report_rx, NULL) || !matches(&report, &final, REPORT)) {
+    if (!read_reply(&final, REPORT, &report, &report_rx)) {
         return false;
     }
 
@@ -330,10 +407,18 @@ static bool range_tag(uint16_t id, uint8_t sequence)
         .completed_at_us = esp_timer_get_time(),
     });
 
-    // Keep the local estimate for USB bench diagnostics.
     int64_t numerator = (int64_t)round_a * round_b - (int64_t)reply_a * reply_b;
     double tof_ticks = numerator / ((double)round_a + round_b + reply_a + reply_b);
     double meters = tof_ticks * DWT_TIME_UNITS * 299702547.0;
+    double millimeters = meters * 1000;
+    if (millimeters >= -MAX_DISTANCE_MM && millimeters <= MAX_DISTANCE_MM) {
+        frame_t result = final;
+        result.type = RESULT;
+        result.distance_mm = (int32_t)(millimeters + (millimeters < 0 ? -0.5 : 0.5));
+        if (!send_frame(&result, false)) {
+            ESP_LOGW(TAG, "TWR result TX did not finish for anchor %u seq %u", result.destination, sequence);
+        }
+    }
     ranging_log_submit(&(ranging_log_measurement_t){
         .tag_id = id,
         .anchor_id = report.source,
@@ -362,7 +447,7 @@ static void range_anchor(uint16_t id, bool *listening)
     frame_t poll;
     uint32_t poll_rx;
     uint32_t status;
-    bool received = read_frame(&poll, &poll_rx, &status);
+    bool received = read_frame(&poll, &poll_rx, &status, esp_timer_get_time() + STATUS_WAIT_US);
     if (!status) {
         return; // Keep RX enabled across host poll timeouts.
     }
@@ -381,7 +466,7 @@ static void range_anchor(uint16_t id, bool *listening)
     uint32_t response_tx = dwt_readtxtimestamplo32();
     frame_t final;
     uint32_t final_rx;
-    if (!read_frame(&final, &final_rx, NULL) || !matches(&final, &response, FINAL)) {
+    if (!read_reply(&response, FINAL, &final, &final_rx)) {
         return;
     }
 
@@ -389,7 +474,16 @@ static void range_anchor(uint16_t id, bool *listening)
     report.type = REPORT;
     report.round_trip = final_rx - response_tx;
     report.reply = response_tx - poll_rx;
-    if (send_frame(&report, false)) {
+    if (send_frame(&report, true)) {
+        frame_t result;
+        if (read_reply(&report, RESULT, &result, NULL)) {
+            if (result.distance_mm >= -MAX_DISTANCE_MM && result.distance_mm <= MAX_DISTANCE_MM) {
+                store_anchor_result(&result);
+            } else {
+                ESP_LOGW(TAG, "Rejecting tag %u seq %u result of %" PRId32 " mm",
+                         poll.source, poll.sequence, result.distance_mm);
+            }
+        }
         ranging_log_submit(&(ranging_log_measurement_t){
             .is_anchor = true,
             .tag_id = poll.source,
@@ -415,36 +509,49 @@ static void ranging_task(void *arg)
     }
 
     uint8_t sequence = 0;
-    uint32_t previous_role = UINT32_MAX;
+    anchor_boot_id = esp_random();
+    node_ranging_config_t previous_config = {0};
     bool listening = false;
+    bool retrying = false;
     while (true) {
-        uint16_t id;
-        bool anchor;
-        node_dashboard_get_ranging_config(&id, &anchor);
+        node_ranging_config_t config = node_dashboard_get_ranging_config();
+        uint16_t id = config.id;
         if (id == 0) {
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
-        uint32_t role = ((uint32_t)id << 1) | anchor;
-        if (role != previous_role) {
+        if (config.id != previous_config.id || config.anchor != previous_config.anchor ||
+            config.target_anchor_id != previous_config.target_anchor_id) {
             store_sample((uwb_twr_sample_t){0});
-            ESP_LOGI(TAG, "Ranging as %s %u", anchor ? "anchor" : "tag", id);
-            previous_role = role;
+            portENTER_CRITICAL(&sample_lock);
+            memset(anchor_samples, 0, sizeof(anchor_samples));
+            portEXIT_CRITICAL(&sample_lock);
+            if (config.target_anchor_id != 0) {
+                ESP_LOGI(TAG, "Ranging as tag %u targeting anchor %u", id, config.target_anchor_id);
+            } else {
+                ESP_LOGI(TAG, "Ranging as %s %u", config.anchor ? "anchor" : "tag", id);
+            }
+            previous_config = config;
             dwt_forcetrxoff();
             listening = false;
+            retrying = false;
         }
-        if (anchor) {
+        if (config.anchor) {
             range_anchor(id, &listening);
             if (!listening) {
                 dwt_forcetrxoff();
             }
         } else {
-            if (!range_tag(id, sequence)) {
+            bool completed = range_tag(id, config.target_anchor_id, sequence);
+            if (!completed) {
                 ESP_LOGW(TAG, "TWR tag %u seq %u: exchange incomplete", id, sequence);
             }
             sequence++;
             dwt_forcetrxoff();
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            // Jitter prevents tags with similar start times from colliding every period.
+            retrying = !completed && !retrying;
+            uint32_t delay_ms = retrying ? 120 + esp_random() % 141 : 850 + esp_random() % 301;
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
         }
     }
 }

@@ -124,6 +124,12 @@
             <input id="node-id" name="id" type="number" required min="1" max="65534" step="1" aria-describedby="id-help">
             <p class="help" id="id-help">Choose a different ID for each board, from 1 to 65534.</p>
           </div>
+          <div class="field" id="target-anchor-field" hidden>
+            <label for="target-anchor-id">Target Anchor ID</label>
+            <input id="target-anchor-id" name="targetAnchorId" type="number" min="1" max="65534" step="1"
+                   aria-describedby="target-anchor-help" disabled>
+            <p class="help" id="target-anchor-help">Enter the anchor’s Node ID. Leave blank to broadcast.</p>
+          </div>
         </fieldset>
         <div class="actions">
           <button id="save" disabled>Save settings</button>
@@ -157,10 +163,13 @@
     const distance = document.getElementById("distance");
     const rangeStatus = document.getElementById("range-status");
     const rangePair = document.getElementById("range-pair");
+    const targetAnchorField = document.getElementById("target-anchor-field");
+    const targetAnchorInput = document.getElementById("target-anchor-id");
     const dwTimeUnitSeconds = 1 / 499.2e6 / 128;
     const propagationSpeedMetersPerSecond = 299702547;
     const maxRangeAgeMs = 3000;
     let settingsLoaded = false;
+    let savedTargetAnchorId = 0;
 
     function message(text, error = false) {
       status.textContent = text;
@@ -175,10 +184,18 @@
         data.radioId === "0xDECA0302" ? "Device ID verified" : "Expected device ID unavailable";
     }
 
+    function updateTargetAnchorField() {
+      const isTag = form.elements.role.value === "tag";
+      targetAnchorField.hidden = targetAnchorInput.disabled = !isTag;
+    }
+
     function fillForm(data) {
       form.elements.role.value = data.role;
       form.elements.label.value = data.label;
       form.elements.id.value = data.id;
+      savedTargetAnchorId = data.targetAnchorId || 0;
+      targetAnchorInput.value = savedTargetAnchorId || "";
+      updateTargetAnchorField();
       settingsLoaded = true;
     }
 
@@ -230,9 +247,11 @@
         if (role === "anchor") {
           displayRange("Connect to the tag’s Wi-Fi to view distance.");
         } else if (sample === null) {
-          displayRange("Waiting for the first exchange with an anchor…");
+          displayRange(savedTargetAnchorId ? `Waiting for Anchor ${savedTargetAnchorId}…` :
+            "Waiting for the first exchange with an anchor…");
         } else if (sample.ageMs >= maxRangeAgeMs) {
-          displayRange("No recent exchange. Check that the anchor is powered and in range.");
+          const anchor = savedTargetAnchorId ? `Anchor ${savedTargetAnchorId}` : "the anchor";
+          displayRange(`No recent exchange. Check that ${anchor} is powered and in range.`);
         } else {
           displayRange("Uncalibrated estimate", sample);
         }
@@ -250,7 +269,14 @@
         message("Enter a label with at least one letter or digit.", true);
         return;
       }
-      const body = [form.elements.role.value, String(form.elements.id.valueAsNumber), label].join("\n");
+      const role = form.elements.role.value;
+      const id = form.elements.id.valueAsNumber;
+      const target = role === "tag" && targetAnchorInput.value !== "" ? targetAnchorInput.valueAsNumber : "";
+      if (target === id) {
+        message("Choose an anchor ID different from this tag’s Node ID.", true);
+        return;
+      }
+      const body = [role, String(id), label, target].join("\n");
       fields.disabled = save.disabled = refresh.disabled = true;
       message("Saving…");
       try {
@@ -269,6 +295,9 @@
       }
     });
 
+    form.addEventListener("change", (event) => {
+      if (event.target.name === "role") updateTargetAnchorField();
+    });
     refresh.addEventListener("click", load);
     load();
     refreshRange();

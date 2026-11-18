@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
@@ -26,6 +27,7 @@
 enum {
     LABEL_MAX_LENGTH = 32,
     NODE_ID_MAX = 65534,
+    ANCHOR_ROLE_MARKER = UINT16_MAX,
     MODE_LED_GPIO = GPIO_NUM_21,
 };
 
@@ -38,7 +40,11 @@ typedef struct {
     uint16_t id;
     uint8_t role;
     char label[LABEL_MAX_LENGTH + 1];
+    uint16_t target_anchor_id;
 } node_settings_t;
+
+// The original settings blob ends immediately before target_anchor_id.
+_Static_assert(offsetof(node_settings_t, target_anchor_id) == 36, "Legacy settings layout changed");
 
 static const char *const TAG = "dashboard";
 static nvs_handle_t storage;
@@ -58,14 +64,17 @@ void node_dashboard_set_radio_id(uint32_t id)
 
 static void update_ranging_config(void)
 {
-    atomic_store(&ranging_config, ((uint32_t)settings.id << 1) | (settings.role == ROLE_ANCHOR));
+    uint32_t target = settings.role == ROLE_ANCHOR ? ANCHOR_ROLE_MARKER : settings.target_anchor_id;
+    atomic_store(&ranging_config, (target << 16) | settings.id);
 }
 
-void node_dashboard_get_ranging_config(uint16_t *id, bool *anchor)
+node_ranging_config_t node_dashboard_get_ranging_config(void)
 {
     uint32_t config = atomic_load(&ranging_config);
-    *id = config >> 1;
-    *anchor = (config & 1) != 0;
+    uint16_t target = config >> 16;
+    bool anchor = target == ANCHOR_ROLE_MARKER;
+    return (node_ranging_config_t){ .id = (uint16_t)config,
+                                    .target_anchor_id = anchor ? 0 : target, .anchor = anchor };
 }
 
 static bool valid_label(const char *label)
@@ -90,11 +99,16 @@ static bool valid_label(const char *label)
 
 static esp_err_t load_settings(uint16_t suggested_id)
 {
-    node_settings_t saved;
+    node_settings_t saved = {0};
     size_t size = sizeof(saved);
     esp_err_t result = nvs_get_blob(storage, SETTINGS_KEY, &saved, &size);
-    if (result == ESP_OK && size == sizeof(saved) && saved.id > 0 &&
+    if (result == ESP_OK && (size == sizeof(saved) || size == offsetof(node_settings_t, target_anchor_id)) &&
+        saved.id > 0 &&
         saved.id <= NODE_ID_MAX && saved.role <= ROLE_ANCHOR && valid_label(saved.label)) {
+        if (saved.role == ROLE_ANCHOR || saved.target_anchor_id > NODE_ID_MAX ||
+            saved.target_anchor_id == saved.id) {
+            saved.target_anchor_id = 0;
+        }
         settings = saved;
         return ESP_OK;
     }
@@ -123,10 +137,10 @@ static esp_err_t serve_settings(httpd_req_t *request)
 {
     char json[240];
     snprintf(json, sizeof(json),
-             "{\"label\":\"%s\",\"role\":\"%s\",\"id\":%u,"
+             "{\"label\":\"%s\",\"role\":\"%s\",\"id\":%u,\"targetAnchorId\":%u,"
              "\"mac\":\"%s\",\"ssid\":\"%s\",\"radioId\":\"0x%08" PRIX32 "\"}",
              settings.label, settings.role == ROLE_ANCHOR ? "anchor" : "tag",
-             settings.id, mac_address, setup_ssid, (uint32_t)atomic_load(&radio_id));
+             settings.id, settings.target_anchor_id, mac_address, setup_ssid, (uint32_t)atomic_load(&radio_id));
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     return httpd_resp_sendstr(request, json);
@@ -141,7 +155,8 @@ static esp_err_t serve_twr(httpd_req_t *request)
     }
 
     uwb_twr_sample_t sample;
-    if (!uwb_ranging_get_latest(&sample) || sample.tag_id != settings.id) {
+    if (!uwb_ranging_get_latest(&sample) || sample.tag_id != settings.id ||
+        (settings.target_anchor_id != 0 && sample.anchor_id != settings.target_anchor_id)) {
         return httpd_resp_sendstr(request, "{\"role\":\"tag\",\"sample\":null}");
     }
 
@@ -157,9 +172,53 @@ static esp_err_t serve_twr(httpd_req_t *request)
     return httpd_resp_sendstr(request, json);
 }
 
+static esp_err_t serve_anchor_ranges(httpd_req_t *request)
+{
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    if (settings.role != ROLE_ANCHOR) {
+        return httpd_resp_sendstr(request, "{\"role\":\"tag\"}");
+    }
+
+    uwb_anchor_sample_t samples[UWB_MAX_ANCHOR_TAGS];
+    size_t count = uwb_ranging_get_anchor_samples(settings.id, samples);
+    const int64_t now = esp_timer_get_time();
+    char json[200];
+    snprintf(json, sizeof(json), "{\"role\":\"anchor\",\"anchorId\":%u,\"tags\":[", settings.id);
+    esp_err_t result = httpd_resp_sendstr_chunk(request, json);
+    for (size_t i = 0; i < count && result == ESP_OK; ++i) {
+        const uwb_anchor_sample_t *sample = &samples[i];
+        snprintf(json, sizeof(json), "%s{\"tagId\":%u,\"sequence\":%u,\"distanceMm\":%" PRId32
+                 ",\"bootId\":%" PRIu32 ",\"recordId\":%" PRIu32 ",\"ageMs\":%" PRId64 "}",
+                 i == 0 ? "" : ",", sample->tag_id, sample->sequence, sample->distance_mm,
+                 sample->boot_id, sample->record_id, (now - sample->completed_at_us) / 1000);
+        result = httpd_resp_sendstr_chunk(request, json);
+    }
+    if (result == ESP_OK) {
+        result = httpd_resp_sendstr_chunk(request, "]}");
+    }
+    return result == ESP_OK ? httpd_resp_sendstr_chunk(request, NULL) : result;
+}
+
+static bool parse_node_id(const char *text, uint16_t *id)
+{
+    uint32_t value = 0;
+    for (const char *digit = text; *digit != '\0'; digit++) {
+        if (*digit < '0' || *digit > '9') {
+            return false;
+        }
+        value = value * 10 + (*digit - '0');
+        if (value > NODE_ID_MAX) {
+            return false;
+        }
+    }
+    *id = value;
+    return value != 0;
+}
+
 static bool parse_settings(char *body, node_settings_t *parsed)
 {
-    // The dashboard sends three LF-separated fields: role, decimal ID, label.
+    // The fourth LF-separated field is the optional decimal target anchor ID.
     char *id = strchr(body, '\n');
     if (id == NULL) {
         return false;
@@ -170,6 +229,10 @@ static bool parse_settings(char *body, node_settings_t *parsed)
         return false;
     }
     *label++ = '\0';
+    char *target = strchr(label, '\n');
+    if (target != NULL) {
+        *target++ = '\0';
+    }
 
     if (strcmp(body, "tag") == 0) {
         parsed->role = ROLE_TAG;
@@ -179,23 +242,18 @@ static bool parse_settings(char *body, node_settings_t *parsed)
         return false;
     }
 
-    if (*id == '\0' || !valid_label(label)) {
+    if (!parse_node_id(id, &parsed->id) || !valid_label(label)) {
         return false;
     }
-    uint32_t value = 0;
-    for (const char *digit = id; *digit != '\0'; digit++) {
-        if (*digit < '0' || *digit > '9') {
-            return false;
-        }
-        value = value * 10 + (*digit - '0');
-        if (value > NODE_ID_MAX) {
-            return false;
-        }
-    }
-    if (value == 0) {
+    if (target == NULL && parsed->role == ROLE_TAG) {
+        parsed->target_anchor_id = settings.target_anchor_id; // Preserve it for older clients.
+    } else if (target != NULL && *target != '\0' && !parse_node_id(target, &parsed->target_anchor_id)) {
         return false;
     }
-    parsed->id = value;
+    if (parsed->target_anchor_id == parsed->id ||
+        (parsed->role == ROLE_ANCHOR && parsed->target_anchor_id != 0)) {
+        return false;
+    }
     strcpy(parsed->label, label);
     return true;
 }
@@ -227,10 +285,11 @@ static esp_err_t save_settings(httpd_req_t *request)
     node_settings_t updated = {0};
     if (memchr(body, '\0', received) != NULL || !parse_settings(body, &updated)) {
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
-                                  "Check the role, node ID, and label.");
+                                  "Check the role, node ID, label, and target anchor ID.");
     }
 
     if (settings.role == updated.role && settings.id == updated.id &&
+        settings.target_anchor_id == updated.target_anchor_id &&
         strcmp(settings.label, updated.label) == 0) {
         return serve_settings(request);
     }
@@ -303,6 +362,7 @@ esp_err_t node_dashboard_start(void)
         { .uri = "/api/settings", .method = HTTP_GET, .handler = serve_settings },
         { .uri = "/api/settings", .method = HTTP_PUT, .handler = save_settings },
         { .uri = "/api/twr", .method = HTTP_GET, .handler = serve_twr },
+        { .uri = "/api/twr/tags", .method = HTTP_GET, .handler = serve_anchor_ranges },
         { .uri = "/api/twr/log.csv", .method = HTTP_GET, .handler = ranging_log_download },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {

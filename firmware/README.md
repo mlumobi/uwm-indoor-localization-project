@@ -23,6 +23,8 @@ Each ESP32 creates a password-protected setup network named `UWM-xxxxxx`, using 
 
 Each board keeps its settings in flash across restarts. A save updates the role LED immediately. The dashboard shows the ESP32 MAC address and the DWM3000 device ID read over SPI. These hardware identifiers are read-only. The ranging task applies the saved Node ID and role between exchanges.
 
+To range with a specific anchor, enter that board’s **Node ID** in **Target Anchor ID** on the tag’s dashboard and select **Save settings**. Clear the field and save to return to broadcast ranging.
+
 ## Two-way ranging
 
 1. Flash the updated firmware on the tag. When setting up a fresh pair, flash both boards. Set one board to **Tag**, the other to **Anchor**, and give them different Node IDs in their Wi-Fi dashboards.
@@ -32,7 +34,9 @@ Each board keeps its settings in flash across restarts. A save updates the role 
 
 The bench firmware uses double-sided two-way ranging on UWB channel 5. The tag sends a poll, the anchor responds, the tag sends a final frame, and the anchor reports its measured round-trip and reply intervals. The tag serves all four intervals in DW3110 ticks at `GET /api/twr`. JavaScript in the computer's browser calculates time of flight and distance from those intervals. See [Decawave application note APS013](https://forum.qorvo.com/uploads/short-url/x34DrF7EW5fQP9wY3aNESqPKz8z.pdf).
 
-The initial poll is broadcast, so this test uses one tag and one anchor. The computer only joins the tag's Wi-Fi. A USB serial connection is optional during ranging. At 115200 baud, the tag logs a local distance estimate and the anchor logs its replies for comparison by exchange sequence.
+Use one anchor for broadcast ranging. With multiple anchors powered on, choose a **Target Anchor ID** on each tag to address its polls to the selected anchor. Multiple tags can share an anchor if each board has a unique Node ID. Tags vary the interval between polls and retry once after a short random delay if an exchange fails. At 115200 baud, each tag logs a local distance estimate and the anchor logs its replies for comparison by tag ID and exchange sequence.
+
+After calculating the distance, the tag sends a result frame to the anchor. The anchor keeps the latest result for up to 32 tags and exposes the list at `GET /api/twr/tags`. The [computer TWR dashboard](../computer/README.md) reads those results through the reference anchor's Wi-Fi or USB connection.
 
 ## Local ranging log
 

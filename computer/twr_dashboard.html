@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UWB TWR distances</title>
+  <style>
+    :root {
+      font-family: "Geist", system-ui, sans-serif;
+      color: #e9edf3;
+      background: #121820;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 64rem; margin: auto; padding: clamp(1rem, 5vw, 3rem); }
+    h1 { margin: 0 0 0.5rem; font-size: clamp(1.65rem, 4vw, 2.5rem); letter-spacing: -0.04em; }
+    p { margin: 0.4rem 0; }
+    .muted { color: #aebaca; }
+    .panel { margin-top: 1.5rem; background: #1c2530; border: 1px solid #394553; border-radius: 0.75rem; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding: 1rem; }
+    select, button { font: inherit; color: inherit; background: #121820; border: 1px solid #647285;
+                     border-radius: 0.4rem; padding: 0.45rem 0.6rem; }
+    select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #74ddbf; outline-offset: 3px; }
+    .log-controls { display: flex; gap: 0.5rem; margin-inline-start: auto; }
+    #start-log:enabled { background: #74ddbf; color: #121820; border-color: #74ddbf; }
+    #end-log:enabled { color: #ffd080; border-color: #ffd080; }
+    button:enabled { cursor: pointer; }
+    button:disabled { opacity: 0.55; }
+    .log-status { padding: 0 1rem 0.8rem; margin: 0; overflow-wrap: anywhere; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 32rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: 0.8rem 1rem; border-top: 1px solid #394553; text-align: left; }
+    th { color: #aebaca; font-size: 0.8rem; font-weight: 600; }
+    .range { font-weight: 650; white-space: nowrap; }
+    .live { color: #74ddbf; }
+    .stale { color: #ffd080; }
+    .empty { padding: 1rem; border-top: 1px solid #394553; margin: 0; }
+    details { padding: 1rem; }
+    summary { cursor: pointer; }
+    ul { margin: 0.75rem 0 0; padding-left: 1.25rem; overflow-wrap: anywhere; }
+    li + li { margin-top: 0.35rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>UWB TWR distances</h1>
+    <p id="summary" class="muted" role="status">Connecting to the local collector…</p>
+    <section class="panel" aria-label="Tag distances">
+      <div class="toolbar">
+        <label for="anchor">Reference anchor</label>
+        <select id="anchor" disabled><option value="">Waiting for an anchor</option></select>
+        <div class="log-controls">
+          <button id="start-log" type="button" disabled>Start logging</button>
+          <button id="end-log" type="button" disabled>End logging</button>
+        </div>
+      </div>
+      <p id="log-status" class="log-status muted" role="status">Checking logging status…</p>
+      <div class="scroll" id="results" hidden>
+        <table>
+          <thead><tr><th scope="col">Tag ID</th><th scope="col">Distance</th><th scope="col">Status</th>
+            <th scope="col">Last update</th><th scope="col">Anchor connection</th></tr></thead>
+          <tbody id="tags"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="empty muted">Waiting for the anchor to report tag distances.</p>
+    </section>
+    <details class="panel">
+      <summary>Board connections</summary>
+      <ul id="connections" class="muted"></ul>
+    </details>
+  </main>
+  <script>
+    const anchor = document.getElementById("anchor");
+    const summary = document.getElementById("summary");
+    const startLog = document.getElementById("start-log");
+    const endLog = document.getElementById("end-log");
+    const logStatus = document.getElementById("log-status");
+    const tags = document.getElementById("tags");
+    const results = document.getElementById("results");
+    const empty = document.getElementById("empty");
+    const connections = document.getElementById("connections");
+    let state = { boards: [], anchors: [] };
+    let online = false;
+    let availableAnchors = "";
+    let logging = null;
+    let logBusy = false;
+    let logRevision = 0;
+    let logRequestError = "";
+
+    function cell(row, text, style = "") {
+      const value = row.insertCell();
+      value.textContent = text;
+      value.className = style;
+    }
+
+    function render() {
+      const anchorIds = state.anchors.join(",");
+      if (anchorIds !== availableAnchors) {
+        const selected = anchor.value;
+        anchor.replaceChildren(...(state.anchors.length
+          ? state.anchors.map(id => new Option(`Anchor ${id}`, id))
+          : [new Option("Waiting for an anchor", "")]));
+        if (state.anchors.includes(Number(selected))) anchor.value = selected;
+        anchor.disabled = state.anchors.length === 0;
+        availableAnchors = anchorIds;
+      }
+
+      const activeAnchor = Number(anchor.value);
+      const byTag = new Map();
+      for (const board of state.boards) {
+        if (board.role !== "anchor" || board.nodeId !== activeAnchor) continue;
+        for (const nodeId of board.heardTags) {
+          if (!byTag.has(nodeId)) byTag.set(nodeId, { nodeId, port: board.port });
+        }
+        for (const [tag, sample] of Object.entries(board.measurements)) {
+          const nodeId = Number(tag);
+          const previous = byTag.get(nodeId)?.sample;
+          if (!previous || (sample.live && !previous.live) ||
+              (sample.live === previous.live && sample.ageSeconds < previous.ageSeconds)) {
+            byTag.set(nodeId, { nodeId, sample, port: board.port });
+          }
+        }
+      }
+      const rows = [...byTag.values()];
+      rows.sort((first, second) => first.nodeId - second.nodeId);
+      tags.replaceChildren();
+      let liveCount = 0;
+      for (const { nodeId, sample, port } of rows) {
+        const live = online && sample?.live;
+        if (live) liveCount++;
+        const status = sample ? (live ? "Live" : "Stale") : "Waiting for a result";
+        const row = tags.insertRow();
+        cell(row, nodeId);
+        cell(row, sample ? `${sample.meters.toFixed(3)} m` : "—", "range");
+        cell(row, status, live ? "live" : sample ? "stale" : "muted");
+        cell(row, sample && online ? `${sample.ageSeconds.toFixed(1)} s ago` : "—");
+        cell(row, port || "—");
+      }
+      results.hidden = !activeAnchor || rows.length === 0;
+      empty.hidden = !results.hidden;
+      empty.textContent = state.boards.length === 0 ? "Connect the reference anchor over USB or start with its Wi-Fi URL." :
+        "Waiting for the anchor to report tag distances.";
+      const message = online ? `${liveCount} of ${rows.length} tags reporting live · Uncalibrated distances` :
+        "Local collector is unreachable.";
+      if (summary.textContent !== message) summary.textContent = message;
+      renderLogging();
+
+      connections.replaceChildren();
+      for (const board of state.boards) {
+        const item = document.createElement("li");
+        item.textContent = `${board.port} · ${board.role ? `${board.role} ${board.nodeId}` : "role unknown"} · ${board.status}`;
+        connections.append(item);
+      }
+    }
+
+    function renderLogging() {
+      const disabled = !online || logBusy || !logging;
+      startLog.disabled = disabled || logging.active;
+      endLog.disabled = disabled || !logging.active;
+      const error = logRequestError || logging?.error;
+      logStatus.classList.toggle("stale", Boolean(error));
+      logStatus.classList.toggle("live", Boolean(online && logging?.active && !error));
+      let text = "Waiting for logging status…";
+      if (error) {
+        text = `Logging error. ${error}`;
+        if (logging?.path) text += ` · ${logging.path}`;
+      } else if (logging?.path) {
+        const label = logging.active ? "Recording" : "Saved";
+        const count = `${logging.count} ${logging.count === 1 ? "reading" : "readings"}`;
+        text = `${label} · ${count} · ${logging.path}`;
+      } else if (logging) {
+        text = `Logs are saved to ${logging.directory}`;
+      }
+      if (logStatus.textContent !== text) logStatus.textContent = text;
+    }
+
+    async function setLogging(action) {
+      logBusy = true;
+      logRevision++;
+      logRequestError = "";
+      renderLogging();
+      try {
+        const response = await fetch(`/api/twr/log/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(3000)
+        });
+        if (!response.ok) throw new Error();
+        logging = await response.json();
+      } catch {
+        logRequestError = "Could not confirm the request. Check the local collector.";
+      } finally {
+        logBusy = false;
+        logRevision++;
+        renderLogging();
+      }
+    }
+
+    async function refresh() {
+      const revision = logRevision;
+      try {
+        const response = await fetch("/api/twr", { signal: AbortSignal.timeout(2000) });
+        if (!response.ok) throw new Error(response.status);
+        state = await response.json();
+        if (!logBusy && revision === logRevision) logging = state.logging;
+        online = true;
+      } catch {
+        online = false;
+      }
+      render();
+      setTimeout(refresh, 500);
+    }
+
+    anchor.addEventListener("change", render);
+    startLog.addEventListener("click", () => setLogging("start"));
+    endLog.addEventListener("click", () => setLogging("stop"));
+    refresh();
+  </script>
+</body>
+</html>
