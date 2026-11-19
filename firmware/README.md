@@ -25,6 +25,14 @@ Each board keeps its settings in flash across restarts. A save updates the role 
 
 To range with a specific anchor, enter that board’s **Node ID** in **Target Anchor ID** on the tag’s dashboard and select **Save settings**. Clear the field and save to return to broadcast ranging.
 
+## Uplink TDoA
+
+Set **Ranging mode** to **Uplink TDoA** on each board's setup page. Assign unique Node IDs and choose one **Main anchor**, one or more **Anchors**, and at least one **Tag**. Each secondary anchor needs the main anchor's Node ID and its exact `UWM-xxxxxx` Wi-Fi name. The boards restart after you save a mode or TDoA radio setting. A secondary anchor's own setup page moves to `http://192.168.5.1` on its setup network. Main anchors, tags, and TWR boards use `http://192.168.4.1` on their own networks.
+
+Tags broadcast UWB blinks. The main anchor sends UWB sync beacons and timestamps its own blink receptions. Secondary anchors timestamp both frame types and send those hardware timestamps over Wi-Fi to the main anchor. The computer connects only to the main anchor, using USB or its setup Wi-Fi. The [computer TDoA dashboard](../computer/TDOA.md#connect-a-main-anchor) performs clock correction and position solving. With two anchors, use the timing CSV for the bench test. Positioning at a known tag height requires at least three synchronized anchors and surveyed positions.
+
+To return to ranging, choose **TWR** and save. The board retains its previous TWR role and target setting for this switch.
+
 ## Two-way ranging
 
 1. Flash the updated firmware on the tag. When setting up a fresh pair, flash both boards. Set one board to **Tag**, the other to **Anchor**, and give them different Node IDs in their Wi-Fi dashboards.

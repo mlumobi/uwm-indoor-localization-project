@@ -15,6 +15,7 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import ProxyHandler, build_opener
 
 from tdoa_solver import Layout, METERS_PER_TICK, TICK_HZ, TICK_MODULUS, Tracker, parse_event
+from tdoa_zones import DangerZones
 
 
 HERE = Path(__file__).resolve().parent
@@ -22,6 +23,7 @@ SERIAL_PREFIX = b"TDOA "
 MAX_FRAME_BYTES = 4096
 POSITION_COLUMNS = ("solved_at_utc", "tag_id", "tag_boot", "sequence", "x_m", "y_m", "residual_m", "anchor_ids")
 TIMING_COLUMNS = ("processed_at_utc", "tag_id", "tag_boot", "sequence", "anchor_id", "reference_anchor_id", "delta_ns")
+ENTRY_COLUMNS = ("detected_at_utc", "tag_id", "zone_id", "zone_name", "x_m", "y_m")
 
 
 def utc_now():
@@ -33,7 +35,7 @@ class Recording:
         self.directory = directory.resolve()
         self.layout = layout
         self.path = None
-        self.raw = self.positions = self.timing = None
+        self.raw = self.positions = self.timing = self.zone_entries = None
         self.event_count = self.fix_count = 0
         self.error = ""
 
@@ -51,6 +53,8 @@ class Recording:
             csv.writer(self.positions).writerow(POSITION_COLUMNS)
             self.timing = (path / "timing.csv").open("x", encoding="utf-8", newline="", buffering=1)
             csv.writer(self.timing).writerow(TIMING_COLUMNS)
+            self.zone_entries = (path / "zone-entries.csv").open("x", encoding="utf-8", newline="", buffering=1)
+            csv.writer(self.zone_entries).writerow(ENTRY_COLUMNS)
             self.raw = (path / "events.jsonl").open("x", encoding="utf-8", buffering=1)
             self.started_at = time.monotonic()
         except OSError as error:
@@ -58,13 +62,13 @@ class Recording:
             self.stop()
 
     def stop(self):
-        for handle in (self.raw, self.positions, self.timing):
+        for handle in (self.raw, self.positions, self.timing, self.zone_entries):
             if handle is not None:
                 try:
                     handle.close()
                 except OSError as error:
                     self.error = str(error)
-        self.raw = self.positions = self.timing = None
+        self.raw = self.positions = self.timing = self.zone_entries = None
 
     def event(self, event, now):
         if self.raw is not None:
@@ -75,7 +79,7 @@ class Recording:
                 self.error = str(error)
                 self.stop()
 
-    def results(self, fixes, timing):
+    def results(self, fixes, timing, entries):
         if self.raw is None:
             return
         try:
@@ -95,6 +99,10 @@ class Recording:
                     if anchor != reference:
                         delta_ns = (ticks - aligned[reference]) / TICK_HZ * 1e9
                         writer.writerow((processed, tag, boot, sequence, anchor, reference, round(delta_ns, 6)))
+            writer = csv.writer(self.zone_entries)
+            for event in entries:
+                writer.writerow((event["at"], event["tag"], event["zone_id"], event["zone_name"],
+                                 round(event["x"], 4), round(event["y"], 4)))
         except OSError as error:
             self.error = str(error)
             self.stop()
@@ -110,6 +118,8 @@ class Collector:
         self.layout = layout
         self.tracker = Tracker(layout)
         self.recording = Recording(args.log_dir, layout)
+        mode = "simulation" if args.simulate else "replay" if args.replay else "live"
+        self.danger = DangerZones(args.log_dir.resolve(), layout, mode)
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.source, self.status = ("Simulation" if args.simulate else "Replay" if args.replay else
@@ -138,15 +148,31 @@ class Collector:
                 if event["type"] == "sync":
                     self.sync_context.append((now, event))
                 self.recording.event(event, now)
-            self.recording.results(*self.tracker.update(now))
+            self.process_fixes(now)
+
+    def process_fixes(self, now):
+        fixes, timing = self.tracker.update(now)
+        entries = self.danger.observe(fixes, now, utc_now)
+        self.recording.results(fixes, timing, entries)
 
     def snapshot(self):
         with self.lock:
             now = time.monotonic()
-            self.recording.results(*self.tracker.update(now))
+            self.process_fixes(now)
             return {**self.tracker.snapshot(now), "source": self.source, "status": self.status,
                     "event_age": None if self.last_event is None else now - self.last_event,
-                    "invalid": self.invalid, "layout": self.layout.as_json(), "recording": self.recording.status()}
+                    "invalid": self.invalid, "layout": self.layout.as_json(), "recording": self.recording.status(),
+                    **self.danger.snapshot()}
+
+    def edit_zone(self, action, identifier, data):
+        with self.lock:
+            if action == "create":
+                self.danger.create(data)
+            elif action == "rename":
+                self.danger.rename(identifier, data.get("name"))
+            else:
+                self.danger.delete(identifier)
+            return self.danger.snapshot()
 
     def set_recording(self, active):
         with self.lock:
@@ -290,9 +316,9 @@ def run(args, layout):
     page = (HERE / "tdoa_dashboard.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
-        def reply(self, data, content_type="application/json"):
+        def reply(self, data, content_type="application/json", status=200):
             content = data if isinstance(data, bytes) else json.dumps(data).encode()
-            self.send_response(200)
+            self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-store")
@@ -311,12 +337,34 @@ def run(args, layout):
                 self.send_error(404)
 
         def do_POST(self):
-            if self.path not in ("/api/tdoa/record/start", "/api/tdoa/record/stop"):
-                self.send_error(404)
-            elif self.headers.get("Content-Type") != "application/json":
+            if self.headers.get("Content-Type") != "application/json":
                 self.send_error(415)
-            else:
+                return
+            if self.path in ("/api/tdoa/record/start", "/api/tdoa/record/stop"):
                 self.reply(collector.set_recording(self.path.endswith("/start")))
+                return
+            parts = self.path.split("/")
+            if self.path == "/api/tdoa/zones":
+                action, identifier = "create", None
+            elif len(parts) == 6 and parts[:4] == ["", "api", "tdoa", "zones"] and parts[5] in ("rename", "delete"):
+                identifier, action = parts[4:]
+            else:
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 16384:
+                    raise ValueError("Invalid danger-zone data size.")
+                data = json.loads(self.rfile.read(length))
+                if not isinstance(data, dict) or (action == "create" and not {"name", "vertices"} <= data.keys()):
+                    raise ValueError("Invalid danger-zone data.")
+                self.reply(collector.edit_zone(action, identifier, data))
+            except ValueError as error:
+                self.reply({"error": str(error)}, status=400)
+            except KeyError:
+                self.reply({"error": "This danger zone no longer exists."}, status=404)
+            except OSError as error:
+                self.reply({"error": f"Could not save danger zones. {error}"}, status=500)
 
         def log_message(self, format, *args):
             pass

@@ -95,7 +95,7 @@ void app_main(void)
         if (now_us >= next_identity_us) {
             next_identity_us = now_us + USB_IDENTITY_INTERVAL_US;
             node_ranging_config_t config = node_dashboard_get_ranging_config();
-            if (config.id != 0 && usb_serial_jtag_is_connected()) {
+            if (config.id != 0 && node_dashboard_get_tdoa_config().role == TDOA_OFF && usb_serial_jtag_is_connected()) {
                 ESP_LOGI(TAG, "Node identity: %s %u", config.anchor ? "anchor" : "tag", config.id);
             }
         }

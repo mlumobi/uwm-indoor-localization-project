@@ -84,6 +84,9 @@ esp_err_t ranging_log_start(void)
     // The record numbers recover the write position without a separate flash update.
     uint32_t newest = 0;
     for (unsigned slot = 0; slot < LOG_CAPACITY; ++slot) {
+        if (slot != 0 && slot % 64 == 0) {
+            vTaskDelay(1);
+        }
         log_record_t record;
         esp_err_t result = read_slot(slot, &record);
         if (result == ESP_ERR_NVS_NOT_FOUND) {

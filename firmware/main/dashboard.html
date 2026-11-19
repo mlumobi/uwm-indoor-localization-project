@@ -51,7 +51,7 @@
     .roles label:has(:checked) { border-color: var(--accent); background: #edf8f4; }
     input[type="radio"] { margin: 0; accent-color: var(--accent); }
     .field { margin-top: 1rem; }
-    .field input {
+    .field input, .field select {
       display: block;
       width: 100%;
       padding: .65rem .75rem;
@@ -82,6 +82,7 @@
     .range-value { font-size: clamp(2.25rem, 7vw, 3.6rem); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.15; }
     .range-value span { color: var(--muted); font-size: .5em; }
     #range-pair { margin-top: .45rem; font-size: .875rem; }
+    [hidden] { display: none !important; }
     @media (max-width: 660px) {
       .layout { grid-template-columns: 1fr; gap: .8rem; }
       section { padding: 1.15rem; }
@@ -96,7 +97,7 @@
     </div>
   </header>
   <main class="layout container">
-    <section class="ranging" aria-labelledby="ranging-heading">
+    <section id="twr-panel" class="ranging" aria-labelledby="ranging-heading">
       <h2 id="ranging-heading">Live TWR distance</h2>
       <p class="range-value"><output id="distance" aria-live="off">—</output> <span>m</span></p>
       <p class="help" id="range-status" role="status">Waiting for ranging data…</p>
@@ -106,11 +107,16 @@
       <h2 id="settings-heading">Node settings</h2>
       <form id="settings">
         <fieldset id="fields" disabled>
+          <div class="field">
+            <label for="mode">Ranging mode</label>
+            <select id="mode" name="mode"><option value="twr">TWR</option><option value="tdoa">Uplink TDoA</option></select>
+          </div>
           <fieldset aria-describedby="role-help">
             <legend>Role</legend>
             <div class="roles">
               <label><input type="radio" name="role" value="tag" required> Tag</label>
               <label><input type="radio" name="role" value="anchor"> Anchor</label>
+              <label id="main-role-option" hidden><input id="main-role" type="radio" name="role" value="main" disabled> Main anchor</label>
             </div>
             <p class="help" id="role-help">A Tag initiates a range measurement. An Anchor responds.</p>
           </fieldset>
@@ -130,6 +136,17 @@
                    aria-describedby="target-anchor-help" disabled>
             <p class="help" id="target-anchor-help">Enter the anchor’s Node ID. Leave blank to broadcast.</p>
           </div>
+          <fieldset id="main-anchor-fields" hidden disabled>
+            <div class="field">
+              <label for="main-anchor-id">Main anchor Node ID</label>
+              <input id="main-anchor-id" type="number" min="1" max="65534" step="1" required>
+            </div>
+            <div class="field">
+              <label for="main-anchor-ssid">Main anchor Wi-Fi network</label>
+              <input id="main-anchor-ssid" maxlength="10" pattern="UWM-[0-9A-F]{6}" placeholder="UWM-XXXXXX" required>
+              <p class="help">Use the network name shown on the main anchor’s setup page.</p>
+            </div>
+          </fieldset>
         </fieldset>
         <div class="actions">
           <button id="save" disabled>Save settings</button>
@@ -143,6 +160,7 @@
         <div><dt>ESP32 MAC address</dt><dd class="id" id="mac">—</dd></div>
         <div><dt>DWM3000 device ID</dt><dd class="id" id="radio">—</dd></div>
         <div><dt>SPI status</dt><dd id="spi">Checking…</dd></div>
+        <div id="uplink-details" hidden><dt>Main anchor Wi-Fi</dt><dd id="uplink-status"></dd></div>
       </dl>
       <button type="button" id="refresh">Refresh board status</button>
     </section>
@@ -165,11 +183,16 @@
     const rangePair = document.getElementById("range-pair");
     const targetAnchorField = document.getElementById("target-anchor-field");
     const targetAnchorInput = document.getElementById("target-anchor-id");
+    const mainFields = document.getElementById("main-anchor-fields");
+    const mainId = document.getElementById("main-anchor-id");
+    const mainSsid = document.getElementById("main-anchor-ssid");
     const dwTimeUnitSeconds = 1 / 499.2e6 / 128;
     const propagationSpeedMetersPerSecond = 299702547;
     const maxRangeAgeMs = 3000;
     let settingsLoaded = false;
     let savedTargetAnchorId = 0;
+    let savedMode = "twr";
+    let savedTwrRole = "tag";
 
     function message(text, error = false) {
       status.textContent = text;
@@ -182,20 +205,38 @@
       document.getElementById("radio").textContent = data.radioId;
       document.getElementById("spi").textContent =
         data.radioId === "0xDECA0302" ? "Device ID verified" : "Expected device ID unavailable";
+      const secondary = data.mode === "tdoa" && data.role === "anchor";
+      document.getElementById("uplink-details").hidden = !secondary;
+      if (secondary) {
+        document.getElementById("uplink-status").textContent = data.mainAnchorConnected ?
+          `Connected to ${data.mainAnchorSsid}` : `Waiting for ${data.mainAnchorSsid}`;
+      }
     }
 
-    function updateTargetAnchorField() {
-      const isTag = form.elements.role.value === "tag";
-      targetAnchorField.hidden = targetAnchorInput.disabled = !isTag;
+    function updateModeFields() {
+      const isTdoa = form.elements.mode.value === "tdoa";
+      const role = form.elements.role.value;
+      document.getElementById("main-role-option").hidden = document.getElementById("main-role").disabled = !isTdoa;
+      targetAnchorField.hidden = targetAnchorInput.disabled = isTdoa || role !== "tag";
+      mainFields.hidden = mainFields.disabled = !isTdoa || role !== "anchor";
+      document.getElementById("role-help").textContent = isTdoa ?
+        "A tag broadcasts blinks. An anchor receives them. The main anchor sends sync beacons and forwards observations to the computer." :
+        "A tag initiates a range measurement. An anchor responds.";
     }
 
     function fillForm(data) {
+      savedMode = data.mode || "twr";
+      savedTwrRole = data.twrRole || data.role;
+      form.elements.mode.value = savedMode;
+      document.getElementById("twr-panel").hidden = savedMode !== "twr";
       form.elements.role.value = data.role;
       form.elements.label.value = data.label;
       form.elements.id.value = data.id;
       savedTargetAnchorId = data.targetAnchorId || 0;
       targetAnchorInput.value = savedTargetAnchorId || "";
-      updateTargetAnchorField();
+      mainId.value = data.mainAnchorId || "";
+      mainSsid.value = data.mainAnchorSsid || "";
+      updateModeFields();
       settingsLoaded = true;
     }
 
@@ -241,10 +282,13 @@
 
     async function refreshRange() {
       try {
+        if (savedMode === "tdoa") return;
         const response = await fetch("/api/twr", { cache: "no-store", signal: AbortSignal.timeout(1500) });
         if (!response.ok) throw new Error("Ranging data unavailable");
         const { role, sample } = await response.json();
-        if (role === "anchor") {
+        if (role === "tdoa") {
+          displayRange("This board is in TDoA mode.");
+        } else if (role === "anchor") {
           displayRange("Connect to the tag’s Wi-Fi to view distance.");
         } else if (sample === null) {
           displayRange(savedTargetAnchorId ? `Waiting for Anchor ${savedTargetAnchorId}…` :
@@ -270,13 +314,16 @@
         return;
       }
       const role = form.elements.role.value;
+      const isTdoa = form.elements.mode.value === "tdoa";
       const id = form.elements.id.valueAsNumber;
       const target = role === "tag" && targetAnchorInput.value !== "" ? targetAnchorInput.valueAsNumber : "";
-      if (target === id) {
-        message("Choose an anchor ID different from this tag’s Node ID.", true);
+      const secondary = isTdoa && role === "anchor";
+      if ((!isTdoa && target === id) || (secondary && mainId.valueAsNumber === id)) {
+        message("Choose an anchor ID different from this board’s Node ID.", true);
         return;
       }
-      const body = [role, String(id), label, target].join("\n");
+      const body = (isTdoa ? [`tdoa-${role}`, id, label, secondary ? mainId.valueAsNumber : "",
+        secondary ? mainSsid.value.trim().toUpperCase() : ""] : [role, id, label, target]).join("\n");
       fields.disabled = save.disabled = refresh.disabled = true;
       message("Saving…");
       try {
@@ -287,7 +334,8 @@
         });
         fillForm(data);
         displayBoard(data);
-        message("Saved to the board.");
+        const address = secondary ? "192.168.5.1" : "192.168.4.1";
+        message(data.restarting ? `Saved. The board will restart. Rejoin ${data.ssid} and open ${address}.` : "Saved to the board.");
       } catch (error) {
         message("Save could not be confirmed. Check the connection and try again.", true);
       } finally {
@@ -296,7 +344,8 @@
     });
 
     form.addEventListener("change", (event) => {
-      if (event.target.name === "role") updateTargetAnchorField();
+      if (event.target.name === "mode" && form.elements.mode.value === "twr") form.elements.role.value = savedTwrRole;
+      if (["mode", "role"].includes(event.target.name)) updateModeFields();
     });
     refresh.addEventListener("click", load);
     load();

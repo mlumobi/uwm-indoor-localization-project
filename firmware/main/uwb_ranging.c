@@ -16,7 +16,11 @@
 #include "freertos/task.h"
 #include "node_dashboard.h"
 #include "ranging_log.h"
+#include "tdoa_gateway.h"
 #include "uwb_ranging.h"
+#ifdef UWM_TDOA_BENCH
+#include "tdoa_bench.h"
+#endif
 
 enum {
     RADIO_MISO = GPIO_NUM_4,
@@ -504,6 +508,19 @@ static void ranging_task(void *arg)
     (void)arg;
     if (init_radio() != ESP_OK) {
         ESP_LOGE(TAG, "Ranging unavailable");
+        vTaskDelete(NULL);
+        return;
+    }
+
+#ifdef UWM_TDOA_BENCH
+    tdoa_bench_run(node_dashboard_get_ranging_config().id);
+    vTaskDelete(NULL);
+    return;
+#endif
+
+    node_tdoa_config_t tdoa = node_dashboard_get_tdoa_config();
+    if (tdoa.role != TDOA_OFF) {
+        tdoa_run(tdoa);
         vTaskDelete(NULL);
         return;
     }

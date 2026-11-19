@@ -1,6 +1,6 @@
 # Sprint 3–4 Progress Report
 
-After the [Sprint 2 design and fabrication order](SPRINT2.md), work moved to board assembly, ESP-IDF firmware, and ranging. The Windows dashboard now displays live distances from two tags through a single anchor over either Wi-Fi or USB. It saves timestamped CSV sessions on the computer. The bench tests verified that measurements reached the dashboard and the CSV. Measured ranging accuracy and uplink TDoA localization remain open.
+After the [Sprint 2 design and fabrication order](SPRINT2.md), work moved to board assembly, ESP-IDF firmware, and ranging. The Windows TWR dashboard displays live distances from two tags through one anchor over either Wi-Fi or USB and saves timestamped CSV sessions. The uplink TDoA dashboard plots and replays positions and logs danger-zone entries in simulation. A surveyed two-anchor TDoA bench run reached 97.01% matched reception, with a 2.778 ns 95th-percentile absolute timing residual against the 1 ns target. TWR accuracy and live TDoA map positioning still need validation.
 
 ## November 14, 2026 bench log
 
@@ -66,7 +66,48 @@ The [local ranging log](../firmware/README.md#local-ranging-log) retains up to *
 - After DS-TWR completes, the tag sends its calculated distance back to the anchor in a fifth UWB frame. The anchor matches the result to the tag and exchange sequence, keeps the latest result for up to **32 tags**, and forwards readings over USB Serial/JTAG or exposes them through `GET /api/twr/tags` on its setup Wi-Fi.
 - The [computer dashboard](../computer/README.md) displays each tag's distance, source, and freshness for the selected reference anchor. It marks readings stale after **three seconds**. Windows received live readings for tags `1001` and `1002` through anchor `1003` using each transport. Tag `1001` ran on separate power and was absent from the PC's USB port list. The collector opened only the anchor connection in each test.
 - **Start logging** opens a timestamped CSV under `computer/logs/`. **End logging** closes it and displays the saved path and row count. Each row includes UTC receive time, tag ID, anchor ID, sequence, distance in meters, and connection source. A live test wrote three readings to a temporary CSV, confirmed that the file stopped changing after ending the session, and opened a different CSV for a second session.
-- Tag `1001` passed the gateway test with its installed Tag firmware. Flash the final build before reusing that board as an anchor.
+
+#### Successful TWR distance log
+
+The saved November 18 capture `computer/logs/twr-20261118T053643.673696Z.csv` contains 19 distance estimates delivered through anchor `1003` over USB (`COM4`). Sequence numbers are per tag.
+
+| Tag | Recorded ranges | Sequences | Distance estimates |
+| --- | ---: | --- | ---: |
+| 1001 | 9 | 181–189 | 0.762–0.818 m |
+| 1002 | 10 | 29–38 | 0.800–0.845 m |
+
+The first four log rows were tag `1001` sequence 181 at 0.767 m, tag `1002` sequence 29 at 0.836 m, tag `1001` sequence 182 at 0.802 m, and tag `1002` sequence 30 at 0.805 m. The estimates are uncalibrated. Ground-truth separations and the total number of attempts are unavailable for this CSV.
+
+### USB anchor discovery and final TWR flash
+
+- The collector was initially restricted to `COM4`, so it missed the newly connected anchor on `COM3`. The dashboard was restarted with USB auto-discovery. The firmware now announces the board's role and Node ID over USB every two seconds, allowing idle anchors to appear before receiving a tag's range. A hardware check showed both `1002` and `1003` in the reference list while anchor `1002` was idle. Reconnect and replacement on the same port were checked with simulated serial devices.
+- Flashed and verified the latest TWR application on all three boards. After reboot, the dashboard identified `COM3` as tag `1002`, `COM4` as anchor `1003`, and `COM5` as tag `1001`. Anchor `1003` resumed reporting live distances from both tags.
+
+## November 18, 2026 computer-side uplink TDoA
+
+- Built a [separate TDoA dashboard and gateway interface](../computer/TDOA.md). The PC reads raw blink and sync timestamps from the main anchor over USB or Wi-Fi, compensates for clock offset and drift using bracketing beacons, and estimates a 2D position at a configured tag height. The floor map displays tag IDs, trails, anchor sync status, and position freshness. A position becomes stale after one second.
+- The simulator exercises two moving tags, independent anchor clock drift, and 40-bit timestamp rollover. Tests verified rollover, rejection of a clock bracket across an anchor restart, fragmented USB frames, and Wi-Fi pagination using a simulated gateway. A recorded session reproduced **10 position fixes** on replay and saved **30 corrected arrival-time differences**.
+- Each session saves raw events, corrected arrival-time differences, solved positions, and the layout locally. The timing CSV supports the two-anchor bench test before there are enough synchronized anchors for a map fix.
+
+### Danger-zone drawing and notifications
+
+- **Draw danger zone** lets the operator click vertices on the floor map, name the polygon, and save it. A fresh tag position inside the polygon generates an entry notification and a history row. A later entry can generate another notification after a fresh position places the tag outside. Stale positions leave the entry state unchanged.
+- A simulated recording saved entry rows for tags `2001` and `2002` to `computer/logs/tdoa-20261118T140914.932940Z/zone-entries.csv`. The current simulator also produced visible notifications and history rows after a zone was drawn through the browser. See [the zone workflow](../computer/TDOA.md#draw-danger-zones).
+
+![TDoA simulator with a drawn danger zone, entry notifications, and entry history](assets/sprint3-4/tdoa-danger-zone.jpg)
+
+### Uplink TDoA firmware and two-anchor hardware test
+
+- Added a selectable uplink TDoA mode and a dedicated bench capture path. A tag broadcasts blinks, the main anchor sends sync beacons, and a secondary anchor timestamps both frame types. In selectable mode, the secondary forwards its timestamps to the main anchor over Wi-Fi. The separate bench image and collector use three serial ports to count transmissions and check reception independently. See the [firmware setup](../firmware/README.md#uplink-tdoa) and [bench procedure](../computer/TDOA.md#three-board-timing-bench).
+- In the surveyed setup, main anchor `1003` and secondary anchor `1002` were 0.66 m apart. Tag `1001` was 0.66 m from the main and 0.30 m from the secondary. The expected secondary-minus-main arrival difference was −1.201 ns. The radios used nominal antenna delays.
+
+| 65-second bench run | Matched blinks | 95th-percentile absolute timing residual |
+| --- | ---: | ---: |
+| Polling both anchors | 585/603 (97.01%) | 2.778 ns |
+| Interrupt wake-up on both anchors | 545/602 (90.53%) | 3.051 ns |
+| Interrupt wake-up on the secondary anchor | 540/598 (90.30%) | 3.300 ns |
+
+The captures verified physical blink reception, clock correction, and timestamp rollover. Polling met the 95% matched reception threshold in this surveyed setup and remains the bench implementation. The surveyed runs exceeded the 1 ns timing limit. With two anchors, the bench measures one arrival-time difference. Live 2D positioning requires a third synchronized anchor and a surveyed map.
 
 ## Status of the Sprint 1 user stories
 
@@ -74,18 +115,18 @@ All five tracking acceptance tests remain open.
 
 | Sprint 1 story | Evidence and remaining work |
 | --- | --- |
-| One tag on an indoor map | The computer dashboard displays live pairwise distances and marks stale readings. Indoor position estimation, map placement, and surveyed position-error tests are still needed. |
-| Two distinct tracked tags | Two physical tags appeared under separate IDs through one anchor. Position identity during crossing paths and per-tag position update rates still need testing. |
-| Restricted-zone alerts | No new implementation or acceptance log for permitted IDs, entry-event handling, or stale/invalid suppression is committed. |
-| Abnormal motion and prolonged signal loss | No new speed-threshold logic, loss-timeout implementation, or scenario results are committed. |
-| Recorded-movement replay | The computer saves timestamped TWR distance sessions as CSV. Position recordings and map replay are still needed. |
+| One tag on an indoor map | The TDoA simulator produces positions on the floor map and marks them stale. Test a physical tag with a surveyed anchor layout and measure position error. |
+| Two distinct tracked tags | Two physical tags appeared under separate IDs through one TWR anchor. Two simulated TDoA tags have separate map trails. Test physical crossing paths and per-tag position update rates. |
+| Restricted-zone alerts | Polygon drawing, fresh-position entry alerts, history, and CSV logging work in simulation. Add permitted-tag lists and run the full acceptance scenarios with physical tags. |
+| Abnormal motion and prolonged signal loss | The map marks stale positions. Implement the speed threshold and prolonged-loss alert, then test both scenarios. |
+| Recorded-movement replay | The computer replays simulated TDoA positions from recorded timestamp events. Validate replay with a physical movement session and surveyed reference data. |
 
-The [Sprint 1 browser mockup](../work/uwb-site.tar.gz) shows three anchors, two movable tags, and a danger zone. It generates ideal arrival times from positions supplied by dragging. The timestamp-to-position solver and the planned Python simulation remain open.
+The [Sprint 1 browser mockup](../work/uwb-site.tar.gz) shows three anchors, two movable tags, and a danger zone. The Sprint 3–4 Python simulator sends timestamp events through the same PC solver used by the live gateway inputs.
 
 ## Remaining work
 
 1. **Resolve the board findings.** Fix the antenna keep-out and thermal relief violations, then rerun the checks. Confirm the intended LED resistor values and DWM3000 GPIO drive limits, and bring the schematic, PCB, and wiring reference into agreement. The wiring review proposed evaluating 2.2–4.7 kΩ for the radio LEDs against the actual components.
 2. **Finish electrical bring-up.** Check the external SW1 pull-up, IRQ, LEDs, sleep/wake behavior, and USB supply and continuity. Inspect grounding, decoupling, antenna clearance, connector orientation, and footprint fit. Measure mobile-tag power consumption and battery runtime.
 3. **Measure TWR accuracy and validate on-board storage.** Compare readings at measured antenna-to-antenna separations, calibrate antenna delays, and repeat with an obstructed path. Verify the on-board CSV across a controlled power cut. Check anchor selection with two active anchors and measure the update rate and missed results with both tags active.
-4. **Test uplink TDoA with one tag and two anchors.** Use the main anchor as the UWB clock reference and gateway. Forward the anchors' raw blink and sync timestamps to the PC for clock correction. Compare corrected timing against surveyed positions. The [Sprint 1 feasibility gate](SPRINT1.md#project-assumption) requires at least **95% matched reception** and a **95th-percentile absolute timing residual of at most 1 ns** at each test position. Time-box the experiment to two focused sessions and document the TWR fallback decision if the gate cannot be met.
-5. **Build the position solver and floor-plan dashboard.** Implement and test the solver with simulated or recorded timestamps. After the timing gate passes, add a third anchor for known-height 2D positioning. Measure position error against surveyed ground truth before testing the second tag, freshness, zone alerts, abnormal motion, signal loss, and replay.
+4. **Reduce TDoA timing error and repeat the surveyed test.** Calibrate antenna delays and compare corrected timing against surveyed geometry at multiple positions. The [Sprint 1 feasibility gate](SPRINT1.md#project-assumption) requires at least **95% matched reception** and a **95th-percentile absolute timing residual of at most 1 ns** at each test position. Document the TWR fallback decision if the gate remains unmet.
+5. **Validate live positions and tracking scenarios.** After the timing gate passes, add a third anchor for known-height 2D positioning. Configure the surveyed layout and measure position error on the floor map before testing the second physical tag, freshness, zone alerts, abnormal motion, signal loss, and replay.

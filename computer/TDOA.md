@@ -18,7 +18,15 @@ Use **Start logging** and **End logging** to save a local session under `compute
 python computer/tdoa_dashboard.py --replay path/to/events.jsonl
 ```
 
+## Draw danger zones
+
+Select **Draw danger zone**, enter a name, and click each turning point in order on the map. **Undo point** removes the last point. **Finish zone** closes and saves the polygon. Use **Save name** in the sidebar to rename a zone. The app saves zones locally by layout and mode, so simulation, replay, and live zones have their own files.
+
+The first fresh position inside a zone triggers an alert, including when a tag is first seen there. Once a fresh position places the tag outside, a later entry can trigger another alert. Stale positions cannot trigger or reset an alert. Notifications appear at the top of the dashboard. **Zone entry history** retains the latest 100 entries in the current run and shows the tag, zone, and local time. Active recording sessions also save those entries to `zone-entries.csv` with UTC timestamps.
+
 ## Connect a main anchor
+
+Use the boards' setup pages to [select the device TDoA roles](../firmware/README.md#uplink-tdoa) first. Set the secondary anchors to join the main anchor's Wi-Fi network. The main anchor aggregates their reports and exposes the same event format on USB and HTTP.
 
 Copy `tdoa_layout.json` and fill in the surveyed antenna positions `[x, y, z]` in meters, the known tag height, the main anchor's Node ID, and the floor-map bounds `[min_x, min_y, max_x, max_y]`. One main anchor and one other anchor can exercise timestamp intake and synchronization. The PC needs observations from at least three synchronized anchors for a 2D fix. A fourth provides redundant observations for checking the fit.
 
@@ -34,7 +42,7 @@ On macOS, pass the anchor's `/dev/cu.*` path. For Wi-Fi, join the main anchor's 
 python computer/tdoa_dashboard.py --anchor-url http://192.168.4.1 --layout path/to/surveyed-layout.json
 ```
 
-Both live transports require the gateway firmware described below. The current TWR firmware does not emit these events. In live mode, watch for incoming sync events before placing the tag. The dashboard displays the last valid position and marks it stale at one second. The fit residual measures consistency with the geometry. Surveyed tag positions are needed to measure true accuracy.
+In live mode, watch for incoming sync events before placing the tag. The dashboard displays the last valid position and marks it stale at one second. The fit residual measures consistency with the geometry. Surveyed tag positions are needed to measure true accuracy.
 
 ## Firmware interface, version 1
 
@@ -57,3 +65,33 @@ TDOA {"v":1,"type":"blink","gateway_boot":43,"tag":2001,"tag_boot":91,"seq":72,"
 Start with one tag and two anchors to compare corrected arrival-time differences with surveyed distances. The Sprint 1 timing gate requires at least 95% matched reception and a 95th-percentile absolute timing residual of at most 1 ns at each test position. Add a third anchor to test map positions. The simulation and replay exercise the software pipeline before those hardware measurements are available.
 
 Run `python -m unittest discover -s computer -p test_tdoa_solver.py` to check timestamp rollover, restart handling, and input validation.
+
+## Three-board timing bench
+
+From the firmware directory in an activated ESP-IDF terminal, build the temporary bench application in a separate folder:
+
+```sh
+idf.py -B build/tdoa-bench -DUWM_TDOA_BENCH=ON -DUWM_TDOA_MAIN_ID=1003 -DUWM_TDOA_TAG_ID=1001 build
+```
+
+Flash that application to the three boards. The saved Node IDs select the bench roles. The main anchor sends sync beacons and receives blinks, the secondary anchor receives both, and the tag broadcasts blinks. The bench reads each board's native USB console to count transmitted frames and independently verify which frames reached each anchor. It keeps the existing TWR configuration in flash. Reflash the normal TWR application after the test.
+
+With the TWR collector stopped, run from the repository root in a Python environment with pySerial:
+
+```sh
+python computer/tdoa_bench.py --main COM4 --anchor COM3 --tag COM5 --seconds 60
+```
+
+Add `--baseline-m`, `--tag-main-m`, and `--tag-anchor-m` with measured antenna separations to evaluate absolute timing residuals. Without a survey, the capture measures shared reception and timing spread around the run's median. Each run saves three serial logs, the JSON summary, merged replay events, and corrected timing in `computer/logs/tdoa-bench-*/`. The bench image uses all three serial ports to count transmissions and measure reception independently. The selectable device mode uses the main anchor's aggregated gateway stream.
+
+### November 18, 2026 bench results
+
+Main anchor `1003` (`COM4`) and secondary anchor `1002` (`COM3`) were 0.66 m apart. Tag `1001` (`COM5`) was 0.66 m from the main and 0.30 m from the secondary. The expected secondary-minus-main arrival-time difference was **−1.201 ns**. The radios used nominal antenna delays.
+
+| 65-second run | Matched blinks | Clock-corrected pairs | Median difference | 95th-percentile absolute timing error |
+| --- | ---: | ---: | ---: | ---: |
+| Polling both anchors | 585/603 (97.01%) | 585 | −3.226 ns | 2.778 ns |
+| Interrupt wake-up on both anchors | 545/602 (90.53%) | 545 | −3.524 ns | 3.051 ns |
+| Interrupt wake-up on the secondary anchor | 540/598 (90.30%) | 540 | −3.636 ns | 3.300 ns |
+
+The bench verified real blink reception, beacon-based clock correction, and timestamp rollover. Polling crossed the 95% reception threshold in the surveyed run. None of the surveyed runs met the 1 ns timing threshold. Polling is the retained bench implementation. Two anchors provide one arrival-time difference, so the test stops at timing validation.
